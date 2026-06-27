@@ -12,3 +12,161 @@ datasource db {
   provider = "postgresql"
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// These string values must exactly match the `as const` values in
+// packages/shared/src/types/incident.ts and user.ts.
+// Prisma generates its own TypeScript types from these — they are parallel
+// representations of the same domain values. If they drift, type errors appear
+// at the Prisma call sites in apps/web and apps/socket.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum IncidentStatus {
+  open
+  investigating
+  mitigating
+  resolved
+}
+
+enum Severity {
+  critical
+  high
+  medium
+  low
+}
+
+enum OpState {
+  pending
+  confirmed
+  failed
+}
+
+enum OperationType {
+  text   // Yjs CRDT delta — collaborative notes
+  field  // structured field mutation: status, severity, assigneeId, title
+}
+
+enum UserRole {
+  responder
+  admin
+}
+
+enum BillingStatus {
+  active
+  past_due
+  cancelled
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODELS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  id               String        @id @default(uuid())
+  name             String
+  slug             String        @unique   // used in /status/[slug] — must be globally unique
+  stripeCustomerId String?       @unique   // nullable until org completes billing setup
+  billingStatus    BillingStatus @default(active)
+  createdAt        DateTime      @default(now())
+  // No updatedAt — organization record is treated as immutable post-creation in V1
+
+  users         User[]
+  incidents     Incident[]
+  subscription  Subscription?   // one-to-one: an org has at most one active subscription
+  billingEvents BillingEvent[]
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String   // bcrypt hash — never the raw password
+  role           UserRole @default(responder)
+  organizationId String
+  displayName    String
+  avatarUrl      String?  // nullable — not required at signup
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  assignedIncidents Incident[]   @relation("AssignedIncidents")
+  operations        Operation[]
+
+  // database-design.md "Table: User" indexing strategy
+  @@index([organizationId])
+  @@index([role, organizationId])
+}
+
+model Incident {
+  id             String         @id @default(uuid())
+  organizationId String
+  title          String
+  status         IncidentStatus @default(open)
+  severity       Severity       // required at creation — no default, caller must supply
+  assigneeId     String?        // nullable — an incident may be unassigned
+  yjsSnapshot    Bytes?         // nullable — no snapshot until the first collaborative edit
+  version        Int            @default(1)  // optimistic lock counter — never 0
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  resolvedAt     DateTime?      // null until status transitions to 'resolved'
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assignee     User?        @relation("AssignedIncidents", fields: [assigneeId], references: [id])
+  operations   Operation[]
+
+  // Dashboard query: "all incidents for org X with status Y"
+  @@index([organizationId, status])
+  // Assignee query: "all incidents assigned to user X"
+  @@index([assigneeId])
+  // database-design.md "Indexing Strategy" — severity filter and recency sort
+  @@index([severity])
+  @@index([updatedAt])
+}
+
+model Operation {
+  id         String        @id @default(uuid())
+  incidentId String
+  authorId   String
+  type       OperationType
+  payload    Json          // Yjs base64 delta OR { field, value } — typed at app layer
+  opState    OpState       @default(pending)
+  messageId  String        @unique  // UUID v4 from client; @unique creates the index
+  createdAt  DateTime      @default(now())
+  // No updatedAt — operations are an immutable append-only audit log
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  author   User     @relation(fields: [authorId], references: [id])
+
+  // Delta replay query: "all ops for incident X since timestamp Y (max 15 min window)"
+  @@index([incidentId, createdAt])
+  // messageId @unique above already creates a unique index — no @@index needed
+}
+
+model Subscription {
+  id                   String   @id @default(uuid())
+  organizationId       String   @unique   // @unique enforces the one-to-one with Organization
+  stripeSubscriptionId String   @unique
+  stripeSeatItemId     String   // SubscriptionItem ID for flat-rate seat billing
+  stripeIncidentItemId String   // SubscriptionItem ID for metered per-incident billing
+  status               String   // mirrors Stripe's own status strings: active, past_due, etc.
+  currentPeriodEnd     DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+model BillingEvent {
+  id             String    @id @default(uuid())
+  organizationId String
+  stripeEventId  String    @unique  // Stripe event ID — idempotency key for webhook processing
+  type           String    // e.g. 'customer.subscription.updated', 'invoice.payment_failed'
+  processedAt    DateTime? // null until the BullMQ processor completes successfully
+  raw            Json      // full Stripe event payload — preserved for debugging and replay
+  createdAt      DateTime  @default(now())
+  // No updatedAt — billing events are an immutable audit trail
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+
