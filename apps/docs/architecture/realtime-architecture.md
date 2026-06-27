@@ -140,7 +140,7 @@ Reconnect Automatically
 
 # Authentication
 
-The websocket connection requires an authenticated session.
+The websocket connection requires a valid access token.
 
 Handshake
 
@@ -149,18 +149,18 @@ Client
 
 ↓
 
-Session Cookie
+Access Token Cookie
 
 ↓
 
-Server Validation
+Signature Verified (public key, RS256)
 
 ↓
 
 Socket Established
 ```
 
-Unauthenticated connections are rejected.
+Unauthenticated, expired, or invalid-signature connections are rejected.
 
 ---
 

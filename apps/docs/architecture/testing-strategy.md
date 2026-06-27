@@ -236,8 +236,11 @@ Verify
 - Registration
 - Login
 - Logout
-- Session persistence
-- Session expiration
+- Access token verification
+- Access token expiration
+- Refresh token flow
+- Refresh token revocation on logout
+- Tampered/invalid signature rejection
 - Unauthorized access
 
 ---
@@ -248,7 +251,7 @@ Every protected endpoint should verify:
 
 - Owner access
 - Admin access
-- Responder access
+- Engineer access
 - Viewer restrictions
 
 Cross-organization access must always fail.

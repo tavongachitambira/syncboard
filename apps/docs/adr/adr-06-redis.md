@@ -20,12 +20,12 @@ SyncBoard has several requirements that are poorly served by PostgreSQL:
 
 **Rate limiting** — enforcing per-IP or per-user request limits requires an atomic counter that is shared across all API server instances. An in-memory counter on a single process is not accurate when traffic is distributed across multiple servers.
 
-**Session store** — in production, session data must be shared across API instances. A process-local memory store does not work when there is more than one API instance.
+**Refresh token registry** — access tokens are stateless JWTs, but refresh tokens must be revocable (logout, compromised account). A hash of each issued refresh token is stored with a TTL matching its lifetime, shared across all API instances.
 
 The solution must be:
 
 - Fast (sub-millisecond for presence reads and rate limit increments)
-- Able to expire keys automatically (TTL-based cleanup for presence, session expiry)
+- Able to expire keys automatically (TTL-based cleanup for presence, refresh token expiry)
 - Accessible from multiple server processes simultaneously
 
 ---
@@ -37,7 +37,7 @@ SyncBoard uses **Redis** for:
 1. **Presence tracking** — Redis Sorted Sets with a score of the last-seen timestamp. Presence expires via TTL.
 2. **Socket.IO Pub/Sub** — `@socket.io/redis-adapter` uses Redis Pub/Sub channels to broadcast events across Socket.IO instances.
 3. **Rate limiting** — Redis atomic `INCR` with `EXPIRE` for sliding window counters per IP/user.
-4. **Session store** — `connect-redis` stores Express sessions in Redis so all API instances share session state.
+4. **Refresh token registry** — a SHA-256 hash of each issued refresh token is stored as a Redis key with a TTL equal to the token's 7-day lifetime. Logout deletes the key, revoking the token immediately. `/auth/refresh` checks the hash exists before issuing a new access token.
 
 Presence data structure:
 
@@ -56,7 +56,7 @@ Redis is treated as **ephemeral** — no data stored in Redis is the source of t
 
 - Presence is rebuilt as users reconnect
 - Rate limit counters reset (acceptable — brief window of unenforced limits after restart)
-- Sessions are lost (users must log in again — acceptable for MVP; tolerable impact)
+- Refresh tokens become unrevocable until they naturally expire (acceptable for MVP; already-issued access tokens are unaffected since they verify statelessly)
 - Socket.IO subscriptions are re-established automatically
 
 ---
@@ -110,7 +110,7 @@ Rejected because:
 **Negative**
 
 - Redis is an additional operational dependency that must be monitored and kept available
-- Session loss on Redis restart means users must log in again — this is acceptable for MVP but should be mitigated by Redis persistence or a managed Redis service in production
+- Redis restart clears the refresh-token registry, meaning a revoked refresh token (e.g. from a forced logout) would no longer be rejected if replayed before its natural expiry — this is acceptable for MVP but should be mitigated by Redis persistence or a managed Redis service in production
 - Redis Pub/Sub does not persist messages — if a Socket.IO instance is down when a message is published, it misses the event. Clients catch up on reconnect via the REST API.
 - Redis Cluster adds complexity; Sentinel-based HA is the recommended path for a single-region production deployment
 

@@ -255,7 +255,7 @@ These are implementation capabilities rather than user-facing features.
 | WebSocket Communication    | MVP      |
 | CRDT Synchronization (Yjs) | MVP      |
 | Snapshot Persistence       | MVP      |
-| Redis Presence             | V2       |
+| Redis Presence             | MVP      |
 | Redis Pub/Sub              | V2       |
 | BullMQ Background Jobs     | V2       |
 | Horizontal Scaling         | Future   |

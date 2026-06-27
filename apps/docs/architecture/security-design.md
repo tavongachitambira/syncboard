@@ -116,9 +116,9 @@ Requirements
 
 ---
 
-## Session Authentication
+## Token Authentication (JWT)
 
-Version 1 uses secure HTTP cookies.
+Version 1 uses RS256-signed JSON Web Tokens, generated and verified with `jose`, delivered as secure HTTP cookies.
 
 Cookie
 
@@ -132,28 +132,33 @@ SameSite=Lax
 
 Advantages
 
-- Resistant to XSS token theft
+- Resistant to XSS token theft (token is not readable by JavaScript)
 - Automatically included by browsers
-- Easy session invalidation
+- Verifiable by any service holding the public key, with no shared store on the request path — critical for `apps/socket`, which verifies every WebSocket event independently of `apps/api`
 
 ---
 
-# Session Lifecycle
+# Token Lifecycle
 
 ```text
 Login
 
 ↓
 
-Session Created
+Access Token Signed (RS256, 15 min)
+Refresh Token Issued (hash stored in Redis, 7 days)
 
 ↓
 
-Cookie Issued
+Cookies Issued
 
 ↓
 
-Authenticated Requests
+Authenticated Requests (access token verified statelessly)
+
+↓
+
+Access Token Expires → Refresh → New Access Token
 
 ↓
 
@@ -161,20 +166,20 @@ Logout
 
 ↓
 
-Session Destroyed
+Refresh Token Revoked (deleted from Redis), Cookies Cleared
 ```
 
 ---
 
-# Session Expiration
+# Token Expiration
 
-Idle timeout
+Access token lifetime
 
 ```
-24 Hours
+15 Minutes
 ```
 
-Maximum lifetime
+Refresh token lifetime
 
 ```
 7 Days
@@ -183,7 +188,7 @@ Maximum lifetime
 Future
 
 - Remember Me
-- Refresh Sessions
+- Device-scoped refresh tokens
 
 ---
 
@@ -245,14 +250,14 @@ Version 1 supports:
 |------|-------------|
 | Owner | Full organization control |
 | Admin | Administrative permissions |
-| Responder | Incident management |
+| Engineer | Incident management |
 | Viewer | Read-only access |
 
 ---
 
 # Permission Matrix
 
-| Resource | Owner | Admin | Responder | Viewer |
+| Resource | Owner | Admin | Engineer | Viewer |
 |-----------|-------|--------|------------|---------|
 |Organization|CRUD|Read/Update|Read|Read|
 |Members|CRUD|CRUD|Read|Read|

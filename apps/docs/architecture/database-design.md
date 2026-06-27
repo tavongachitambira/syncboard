@@ -71,7 +71,8 @@ Organization
       ├── Comments
       ├── Activities
       ├── Operations
-      └── IncidentDocument
+      ├── IncidentDocument
+      └── Notifications
 ```
 
 ---
@@ -109,7 +110,7 @@ id UUID
 
 Represents an authenticated account.
 
-> **Future Note:** If we support multiple organizations, introduce a `Membership` table. Until then, `User.orgId` is acceptable and keeps the MVP simpler.
+> **Future Note:** If we support multiple organizations, introduce a `Membership` table. Until then, `User.organizationId` is acceptable and keeps the MVP simpler.
 
 Fields:
 
@@ -119,16 +120,16 @@ Fields:
 * displayName
 * avatarUrl
 * role
-* orgId
+* organizationId
 
 Indexes:
 
 ```text
 email UNIQUE
 
-orgId
+organizationId
 
-(role, orgId)
+(role, organizationId)
 ```
 
 ---
@@ -378,7 +379,7 @@ messageId
 
 type
 
-payload JSONB
+payload BYTEA
 
 state
 
@@ -391,6 +392,8 @@ Purpose
 * Conflict recovery
 * Offline synchronization
 * Audit
+
+`payload` is `BYTEA`, not `JSONB` — it stores the raw binary Yjs update (`Uint8Array`) produced by the CRDT, not structured JSON. This differs from `Activity.payload`, which is `JSONB` because activity details are genuinely structured, variable-shape data.
 
 Indexes
 
@@ -456,6 +459,50 @@ Never store plaintext API secrets.
 
 ---
 
+# Table: Notification
+
+Represents an in-app notification delivered to a member. Referenced throughout this document (the "Create Incident" transaction below, `realtime-architecture.md`'s notification flow) but previously undefined here — added to close that gap.
+
+Fields
+
+```
+id
+
+organizationId
+
+recipientId
+
+type
+
+payload JSONB
+
+status
+
+createdAt
+
+readAt
+```
+
+`type` maps to the `NotificationType` enumeration (e.g. `ASSIGNMENT`, `INCIDENT_CREATED`, `MENTION` (future)).
+
+`status` maps to `NotificationStatus`: `UNREAD` → `READ` → `ARCHIVED`, matching the lifecycle defined in `domain-model.md`.
+
+`payload` is `JSONB` — its shape varies by `type` (e.g. an assignment notification carries `incidentId` and `assignedById`; an incident-created notification carries `incidentId` and `severity`).
+
+Indexes
+
+```text
+recipientId
+
+(recipientId, status)
+
+(recipientId, createdAt)
+```
+
+Notifications belong to exactly one recipient and are deleted when the recipient (or their organization) is deleted.
+
+---
+
 # Future Billing Tables
 
 These remain largely as you designed them:
@@ -469,16 +516,17 @@ They should be isolated from the core incident domain.
 
 # Cascade Rules
 
-| Parent       | Child      | Action                               |
-| ------------ | ---------- | ------------------------------------ |
-| Organization | Services   | Cascade                              |
-| Organization | Members    | Cascade                              |
-| Organization | Incidents  | Cascade                              |
-| Incident     | Comments   | Cascade                              |
-| Incident     | Activities | Cascade                              |
-| Incident     | Operations | Cascade                              |
-| Incident     | Document   | Cascade                              |
-| Service      | Incidents  | Restrict (or reassign before delete) |
+| Parent       | Child        | Action                               |
+| ------------ | ------------ | ------------------------------------ |
+| Organization | Services     | Cascade                              |
+| Organization | Members      | Cascade                              |
+| Organization | Incidents    | Cascade                              |
+| Organization | Notifications| Cascade                              |
+| Incident     | Comments     | Cascade                              |
+| Incident     | Activities   | Cascade                              |
+| Incident     | Operations   | Cascade                              |
+| Incident     | Document     | Cascade                              |
+| Service      | Incidents    | Restrict (or reassign before delete) |
 
 ---
 
@@ -495,7 +543,7 @@ Primary read patterns:
 Representative indexes:
 
 ```text
-Incident(orgId, status)
+Incident(organizationId, status)
 Incident(serviceId, status)
 Assignment(userId)
 Activity(incidentId, createdAt)
@@ -573,9 +621,11 @@ This prevents accidental cross-tenant access.
 
 # Mapping to Prisma
 
+> **Check against your actual `schema.prisma`:** this table assumes the existing model is spelled `Organization` (matching every other reference to it in this document and across all other docs). If your real schema already has a model literally named `Organisation`, that's a genuine naming drift worth resolving deliberately — either rename the model or rename this row — rather than letting `organizationId` foreign keys point at an `Organisation` model.
+
 | Domain Entity    | Prisma Model               |
 | ---------------- | -------------------------- |
-| Organization     | `Organisation`             |
+| Organization     | `Organization`             |
 | User             | `User`                     |
 | Service          | `Service` *(new)*          |
 | Incident         | `Incident`                 |
@@ -586,6 +636,7 @@ This prevents accidental cross-tenant access.
 | Operation        | `Operation`                |
 | Invitation       | `Invitation` *(new)*       |
 | APIKey           | `ApiKey` *(new)*           |
+| Notification     | `Notification` *(new)*     |
 | Subscription     | `Subscription`             |
 | BillingEvent     | `BillingEvent`             |
 

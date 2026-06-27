@@ -321,7 +321,7 @@ logger.error(
   {
     error,
     incidentId: payload.incidentId,
-    userId: req.session.userId,
+    userId: req.auth.userId,
     requestId: req.id,
   },
   "Failed to update incident"
@@ -369,9 +369,11 @@ Do not log passwords, tokens, or secrets in error context.
 | Code | Meaning |
 |------|---------|
 | `VALIDATION_ERROR` | Input failed schema validation |
-| `UNAUTHORIZED` | No valid session |
+| `UNAUTHORIZED` | No valid access token |
 | `INVALID_CREDENTIALS` | Wrong email or password |
-| `SESSION_EXPIRED` | Session has timed out |
+| `TOKEN_EXPIRED` | Access token has expired (client should call /auth/refresh) |
+| `INVALID_TOKEN` | Token is malformed or fails signature verification |
+| `REFRESH_TOKEN_REVOKED` | Refresh token has been revoked or expired |
 | `FORBIDDEN` | Authenticated but not permitted |
 | `INCIDENT_NOT_FOUND` | Incident does not exist |
 | `INCIDENT_ALREADY_RESOLVED` | Cannot modify a resolved incident |

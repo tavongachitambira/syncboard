@@ -284,7 +284,9 @@ DATABASE_URL
 
 REDIS_URL
 
-SESSION_SECRET
+JWT_PRIVATE_KEY
+
+JWT_PUBLIC_KEY
 
 PORT
 
@@ -302,7 +304,7 @@ REDIS_URL
 
 DATABASE_URL
 
-SESSION_SECRET
+JWT_PUBLIC_KEY
 ```
 
 ---
@@ -531,7 +533,7 @@ Redis provides
 
 - Presence
 - Pub/Sub
-- Session Store (Future)
+- Refresh Token Registry
 - Rate Limiting
 - Caching
 

@@ -69,12 +69,14 @@ Two authentication mechanisms are supported.
 ## User Authentication
 
 ```
-Cookie Session
+JWT (RS256), delivered as HttpOnly cookies
 ```
 
 Used by:
 
 - Web Application
+
+Access tokens are short-lived (15 minutes) and verified statelessly. Refresh tokens are long-lived (7 days) and exchanged for a new access token via `/auth/refresh`.
 
 ---
 
@@ -247,6 +249,18 @@ POST
 ```
 /auth/logout
 ```
+
+---
+
+## Refresh
+
+POST
+
+```
+/auth/refresh
+```
+
+Exchanges a valid, unrevoked refresh token cookie for a new access token cookie. Returns `401` if the refresh token is missing, expired, or revoked.
 
 ---
 
