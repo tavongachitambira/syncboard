@@ -17,13 +17,16 @@ export const Severity = {
 } as const
 export type Severity = (typeof Severity)[keyof typeof Severity]
 
-// ─── OpState ─────────────────────────────────────────────────────────────────
-// Tracks whether a Yjs operation has been rolled into a snapshot.
-// PENDING ops are replayed on reconnect; ARCHIVED ops are pre-snapshot.
+// ─── OpState ──────────────────────────────────────────────────────────────────
+// Mirrors the Prisma OpState enum in packages/db/prisma/schema.prisma.
+// PENDING  → persisted, not yet in a snapshot
+// CONFIRMED → acknowledged and durable
+// FAILED   → rejected by the server; client must discard and re-sync
 
 export const OpState = {
   PENDING: "PENDING",
-  ARCHIVED: "ARCHIVED",
+  CONFIRMED: "CONFIRMED",
+  FAILED: "FAILED",
 } as const
 export type OpState = (typeof OpState)[keyof typeof OpState]
 

@@ -8,21 +8,22 @@ import { z } from "zod"
 // ─── Room join ────────────────────────────────────────────────────────────────
 
 export const joinIncidentRoomSchema = z.object({
-  incidentId: z.string().uuid(),
+  incidentId: z.uuid(),
 })
 export type JoinIncidentRoomPayload = z.infer<typeof joinIncidentRoomSchema>
 
 // ─── Yjs collaboration ────────────────────────────────────────────────────────
 
+// schemas/payloads.ts
 export const documentUpdateSchema = z.object({
-  incidentId: z.string().uuid(),
-  update: z.string().min(1), // base64 Yjs Uint8Array
-  messageId: z.string().uuid(),
+  incidentId: z.uuid(),
+  update: z.string().min(1),
+  messageId: z.uuid(),
 })
-export type DocumentUpdatePayload = z.infer<typeof documentUpdateSchema>
+export type DocumentUpdateInput = z.infer<typeof documentUpdateSchema>  // ← was DocumentUpdatePayload
 
 export const documentSyncRequestSchema = z.object({
-  incidentId: z.string().uuid(),
+  incidentId: z.uuid(),
   // Client sends its latest known snapshotVersion so the server
   // can return only the delta since that point.
   fromVersion: z.number().int().nonnegative(),
@@ -34,6 +35,6 @@ export type DocumentSyncRequestPayload = z.infer<
 // ─── Presence ─────────────────────────────────────────────────────────────────
 
 export const presenceHeartbeatSchema = z.object({
-  incidentId: z.string().uuid(),
+  incidentId: z.uuid(),
 })
 export type PresenceHeartbeatPayload = z.infer<typeof presenceHeartbeatSchema>
