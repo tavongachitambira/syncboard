@@ -1,4 +1,8 @@
+import { config } from "dotenv"
+import { resolve } from "path"
 import { z } from "zod"
+
+config({ path: resolve(import.meta.dirname, "../.env") })
 
 const schema = z.object({
   NODE_ENV: z
