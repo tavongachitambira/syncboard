@@ -29,6 +29,11 @@
 - [Observability](./engineering/observability.md)
 - [Performance](./engineering/performance.md)
 
+## Modules
+
+- [auth-oauth2](./modules/auth-oauth2/readme.md)
+- [auth-oauth2.0](./modules/auth-oauth2.0/readme.md)
+
 ## ADRs
 
 - [ADR-01 — Monorepo](./adr/adr-01-monorepo.md)

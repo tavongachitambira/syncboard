@@ -32,6 +32,7 @@ export type NotificationStatus =
 
 export type JwtPayload = {
   sub: string // userId
+  jti: string // token id — used as the Redis key suffix for refresh-token lookups
   organizationId: string
   role: UserRole
   iat: number
