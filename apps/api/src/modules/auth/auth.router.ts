@@ -1,6 +1,7 @@
+
 import { Router, type Router as ExpressRouter } from "express"
 import type { Request, Response, NextFunction } from "express"
-import { registerSchema, loginSchema } from "@workspace/shared"
+import { signinSchema, signupSchema} from "@workspace/shared"
 import { AppError } from "../../lib/errors.js"
 import {
   setTokenCookies,
@@ -23,10 +24,11 @@ function validationError(issues: { path: PropertyKey[]; message: string }[]) {
   }
   return new AppError(400, "VALIDATION_ERROR", "Validation failed")
 }
+
 authRouter.post(
-  "/register",
+  "/signup",
   async (req: Request, res: Response, next: NextFunction) => {
-    const parsed = registerSchema.safeParse(req.body)
+    const parsed = signupSchema.safeParse(req.body)
     if (!parsed.success) {
       next(validationError(parsed.error.issues))
       return
@@ -44,9 +46,9 @@ authRouter.post(
 )
 
 authRouter.post(
-  "/login",
+  "/signin",
   async (req: Request, res: Response, next: NextFunction) => {
-    const parsed = loginSchema.safeParse(req.body)
+    const parsed = signinSchema.safeParse(req.body)
     if (!parsed.success) {
       next(validationError(parsed.error.issues))
       return

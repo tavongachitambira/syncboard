@@ -29,10 +29,9 @@
 - [Observability](./engineering/observability.md)
 - [Performance](./engineering/performance.md)
 
-## Modules
+## Learning Log
 
-- [auth-oauth2](./modules/auth-oauth2/readme.md)
-- [auth-oauth2.0](./modules/auth-oauth2.0/readme.md)
+- [Learning Journal](./log/readme.md)
 
 ## ADRs
 

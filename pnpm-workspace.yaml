@@ -1,7 +1,6 @@
 packages:
   - "apps/*"
   - "packages/*"
-  - "apps/docs/modules/*/examples/*"
 
 allowBuilds:
   sharp: true

@@ -3,37 +3,27 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { registerSchema } from "@workspace/shared"
-
+import { signinSchema } from "@workspace/shared"
 import { apiFetch } from "@/src/lib/api"
 import type { UserResponse, OrganizationResponse } from "@workspace/shared"
 
-type RegisterData = {
+type LoginData = {
   user: UserResponse
   organization: OrganizationResponse
 }
 
-export default function RegisterPage() {
+export default function LoginPage() {
   const router = useRouter()
-  const [fields, setFields] = useState({
-    email: "",
-    password: "",
-    displayName: "",
-    organizationName: "",
-  })
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-
-  function set(key: keyof typeof fields) {
-    return (e: React.ChangeEvent<HTMLInputElement>) =>
-      setFields((prev) => ({ ...prev, [key]: e.target.value }))
-  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
 
-    const parsed = registerSchema.safeParse(fields)
+    const parsed = signinSchema.safeParse({ email, password })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input")
       return
@@ -41,15 +31,15 @@ export default function RegisterPage() {
 
     setPending(true)
     try {
-      const res = await apiFetch<RegisterData>("/auth/register", {
+      const res = await apiFetch<LoginData>("/auth/login", {
         method: "POST",
         body: JSON.stringify(parsed.data),
       })
 
       if (!res.success) {
         setError(
-          res.error.code === "EMAIL_TAKEN"
-            ? "An account with that email already exists"
+          res.error.code === "INVALID_CREDENTIALS"
+            ? "Incorrect email or password"
             : res.error.message,
         )
         return
@@ -65,43 +55,13 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center">
       <div className="w-full max-w-sm space-y-6 p-8">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">Create your account</h1>
+          <h1 className="text-2xl font-semibold">Sign in</h1>
           <p className="text-sm text-muted-foreground">
-            You&apos;ll be the owner of your new organization
+            Enter your credentials to continue
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label htmlFor="organizationName" className="text-sm font-medium">
-              Organization name
-            </label>
-            <input
-              id="organizationName"
-              type="text"
-              autoComplete="organization"
-              required
-              value={fields.organizationName}
-              onChange={set("organizationName")}
-              className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="displayName" className="text-sm font-medium">
-              Your name
-            </label>
-            <input
-              id="displayName"
-              type="text"
-              autoComplete="name"
-              required
-              value={fields.displayName}
-              onChange={set("displayName")}
-              className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-
           <div className="space-y-1.5">
             <label htmlFor="email" className="text-sm font-medium">
               Email
@@ -111,8 +71,8 @@ export default function RegisterPage() {
               type="email"
               autoComplete="email"
               required
-              value={fields.email}
-              onChange={set("email")}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -124,14 +84,12 @@ export default function RegisterPage() {
             <input
               id="password"
               type="password"
-              autoComplete="new-password"
+              autoComplete="current-password"
               required
-              minLength={8}
-              value={fields.password}
-              onChange={set("password")}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
-            <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
           </div>
 
           {error !== null && (
@@ -143,17 +101,17 @@ export default function RegisterPage() {
             disabled={pending}
             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            {pending ? "Creating account…" : "Create account"}
+            {pending ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
+          No account?{" "}
           <Link
-            href="/login"
+            href="/register"
             className="text-foreground underline-offset-4 hover:underline"
           >
-            Sign in
+            Create one
           </Link>
         </p>
       </div>

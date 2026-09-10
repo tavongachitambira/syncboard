@@ -7,6 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ENUMS
 // Values are SCREAMING_SNAKE_CASE to exactly match the `as const` objects in
@@ -48,8 +49,14 @@ enum UserRole {
 
 enum BillingStatus {
   ACTIVE
-  PAST_DUE
+  PAST_DUE  
   CANCELLED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +75,7 @@ model Organization {
   incidents     Incident[]
   subscription  Subscription?
   billingEvents BillingEvent[]
+  invitations   Invitation[]
 }
 
 model User {
@@ -84,6 +92,7 @@ model User {
   organization        Organization       @relation(fields: [organizationId], references: [id])
   incidentAssignments IncidentAssignee[]
   operations          Operation[]
+  sentInvitations     Invitation[]       @relation("InvitationSender")
 
   @@index([organizationId])
   @@index([role, organizationId])
@@ -165,4 +174,26 @@ model BillingEvent {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
+}
+
+// A pending request for someone to join an organization. The raw token is
+// only ever held by the invitee's link — only its hash is persisted, same
+// pattern as refresh tokens and API keys (see ADR-02, security-design.md).
+model Invitation {
+  id             String           @id @default(uuid())
+  organizationId String
+  email          String
+  role           UserRole         @default(VIEWER)
+  tokenHash      String           @unique
+  status         InvitationStatus @default(PENDING)
+  invitedById    String
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  acceptedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invitedBy    User         @relation("InvitationSender", fields: [invitedById], references: [id])
+
+  @@index([organizationId])
+  @@index([email])
 }

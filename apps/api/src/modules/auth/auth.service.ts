@@ -8,8 +8,8 @@ import {
 } from "../../lib/tokens.js"
 import { AppError } from "../../lib/errors.js"
 import type {
-  RegisterInput,
-  LoginInput,
+  SignupInput,
+  SigninInput,
   UserResponse,
   OrganizationResponse,
   UserRole,
@@ -32,7 +32,7 @@ type AuthResult = {
 
 const {prisma: db}  = prisma
 
-export async function register(input: RegisterInput): Promise<AuthResult> {
+export async function register(input: SignupInput): Promise<AuthResult> {
   const existing = await db.user.findUnique({ where: { email: input.email } })
   if (existing !== null) {
     throw new AppError(409, "EMAIL_TAKEN", "That email address is already in use")
@@ -55,7 +55,7 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
       const org = await tx.organization.create({
         data: { name: input.organizationName, slug },
       })
-      const u = await tx.user.create({
+      const usr = await tx.user.create({
         data: {
           email: input.email,
           passwordHash,
@@ -64,7 +64,7 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
           organizationId: org.id,
         },
       })
-      return { user: u, organization: org }
+      return { user: usr, organization: org }
     })
     user = result.user
     organization = result.organization
@@ -92,7 +92,7 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
   }
 }
 
-export async function login(input: LoginInput): Promise<AuthResult> {
+export async function login(input: SigninInput): Promise<AuthResult> {
   const user = await db.user.findUnique({ where: { email: input.email } })
 
   // Always run bcrypt to prevent timing-based user enumeration
