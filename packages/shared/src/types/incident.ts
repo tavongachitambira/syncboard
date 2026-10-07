@@ -34,6 +34,7 @@ export type OpState = (typeof OpState)[keyof typeof OpState]
 
 export const ActivityType = {
   INCIDENT_CREATED: "INCIDENT_CREATED",
+  TITLE_CHANGED: "TITLE_CHANGED",
   STATUS_CHANGED: "STATUS_CHANGED",
   SEVERITY_CHANGED: "SEVERITY_CHANGED",
   ASSIGNED: "ASSIGNED",
@@ -54,7 +55,7 @@ export type AssigneeResponse = {
 export type IncidentResponse = {
   id: string
   organizationId: string
-  serviceId: string
+  serviceId: string | null
   title: string
   severity: Severity
   status: IncidentStatus
