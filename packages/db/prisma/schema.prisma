@@ -7,7 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ENUMS
 // Values are SCREAMING_SNAKE_CASE to exactly match the `as const` objects in
@@ -49,7 +48,7 @@ enum UserRole {
 
 enum BillingStatus {
   ACTIVE
-  PAST_DUE  
+  PAST_DUE
   CANCELLED
 }
 
@@ -72,6 +71,7 @@ model Organization {
   createdAt        DateTime      @default(now())
 
   users         User[]
+  services      Service[]
   incidents     Incident[]
   subscription  Subscription?
   billingEvents BillingEvent[]
@@ -93,14 +93,35 @@ model User {
   incidentAssignments IncidentAssignee[]
   operations          Operation[]
   sentInvitations     Invitation[]       @relation("InvitationSender")
+  ownedServices       Service[]          @relation("ServiceOwner")
+  comments            Comment[]
+  activities          Activity[]
 
   @@index([organizationId])
   @@index([role, organizationId])
 }
 
+model Service {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  ownerId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  owner        User         @relation("ServiceOwner", fields: [ownerId], references: [id])
+  incidents    Incident[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
 model Incident {
   id             String         @id @default(uuid())
   organizationId String
+  serviceId      String?
   title          String
   status         IncidentStatus @default(OPEN)
   severity       Severity
@@ -110,13 +131,17 @@ model Incident {
   updatedAt      DateTime       @updatedAt
   resolvedAt     DateTime?
 
-  organization Organization      @relation(fields: [organizationId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  service      Service?           @relation(fields: [serviceId], references: [id])
   assignees    IncidentAssignee[]
   operations   Operation[]
+  comments     Comment[]
+  activities   Activity[]
 
   @@index([organizationId, status])
   @@index([severity])
   @@index([updatedAt])
+  @@index([serviceId])
 }
 
 // Junction table — an incident can have multiple assignees
@@ -130,6 +155,34 @@ model IncidentAssignee {
 
   @@id([incidentId, userId])
   @@index([userId]) // "all incidents assigned to user X"
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  incidentId String
+  authorId   String
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@index([incidentId])
+}
+
+model Activity {
+  id         String   @id @default(uuid())
+  incidentId String
+  actorId    String
+  type       String
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  actor    User     @relation(fields: [actorId], references: [id])
+
+  @@index([incidentId, createdAt])
 }
 
 model Operation {
