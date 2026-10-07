@@ -1,7 +1,10 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express"
 import { AppError } from "../lib/errors.js"
-import type { UserRole } from "@workspace/shared"
+import type { JwtPayload, UserRole } from "@workspace/shared"
 
+type AuthenticatedRequest = Request & { caller: JwtPayload }
+
+// Role hierarchy — higher index = more permissions
 // Roles ordered from least to most privileged. A caller holding a given role
 // can do everything a lower-ranked role can — this mirrors the monotonic
 // shape of the permission matrix in apps/docs/architecture/security-design.md,
@@ -19,6 +22,34 @@ const ROLE_RANK: Record<UserRole, number> = {
 function assertAuthenticated(req: Request): asserts req is AuthenticatedRequest {
   if (!req.caller) {
     throw new AppError(401, "MISSING_TOKEN", "Authentication required")
+  }
+}
+
+// Middleware factory — pass the minimum role required for the route
+export function authorize(...roles: UserRole[]): RequestHandler {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    try {
+      assertAuthenticated(req)
+    } catch (err) {
+      next(err)
+      return
+    }
+
+    const callerRole = req.caller.role as UserRole
+    const allowed = roles.some(
+      (role) => ROLE_RANK[callerRole] >= ROLE_RANK[role],
+    )
+    if (!allowed) {
+      next(
+        new AppError(
+          403,
+          "INSUFFICIENT_PERMISSIONS",
+          "You do not have permission to perform this action",
+        ),
+      )
+      return
+    }
+    next()
   }
 }
 
@@ -75,7 +106,7 @@ export function requireMinRole(minimum: UserRole): RequestHandler {
       return
     }
 
-    if (ROLE_RANK[req.caller!.role] < ROLE_RANK[minimum]) {
+    if (ROLE_RANK[req.caller.role] < ROLE_RANK[minimum]) {
       next(
         new AppError(
           403,
