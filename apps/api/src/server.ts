@@ -1,9 +1,7 @@
 import { app } from "./app.js"
-import { prisma} from '@workspace/db'
+import { prisma as db } from "@workspace/db"
 import { redis } from "./lib/redis.js"
 import { env } from "./env.js"
-
-const { prisma : db} = prisma; 
 
 async function start(): Promise<void> {
   await redis.connect()

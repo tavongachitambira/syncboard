@@ -1,4 +1,4 @@
-import {prisma} from '@workspace/db'
+import { prisma as db } from "@workspace/db"
 import { refreshTokens } from "../../lib/redis.js"
 import { hashPassword, verifyPassword } from "../../lib/password.js"
 import {
@@ -29,8 +29,6 @@ type AuthResult = {
   accessToken: string
   refreshToken: string
 }
-
-const {prisma: db}  = prisma
 
 export async function register(input: SignupInput): Promise<AuthResult> {
   const existing = await db.user.findUnique({ where: { email: input.email } })

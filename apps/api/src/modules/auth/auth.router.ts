@@ -48,6 +48,7 @@ authRouter.post(
 authRouter.post(
   "/signin",
   async (req: Request, res: Response, next: NextFunction) => {
+    
     const parsed = signinSchema.safeParse(req.body)
     if (!parsed.success) {
       next(validationError(parsed.error.issues))
