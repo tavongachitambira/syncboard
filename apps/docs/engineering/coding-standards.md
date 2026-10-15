@@ -221,7 +221,7 @@ Reserve comments for:
 
 ```ts
 // The version field guards against concurrent status updates.
-// Do not remove this check — see ADR-01 on optimistic locking.
+// Do not remove this check — see ADR-05 on optimistic concurrency.
 if (incident.version !== input.version) {
   throw new ConflictError("Incident was modified by another user.")
 }
@@ -254,9 +254,10 @@ Environment variables must be validated at startup using Zod.
 
 ```ts
 const env = z.object({
-  DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
-  SESSION_SECRET: z.string().min(32),
+  DATABASE_URL: z.url(),
+  REDIS_URL: z.url(),
+  JWT_PRIVATE_KEY: z.string().min(1),
+  JWT_PUBLIC_KEY: z.string().min(1),
   PORT: z.coerce.number().default(4000),
 }).parse(process.env)
 

@@ -109,7 +109,8 @@ packages/
     db/
     ui/
     shared/
-    config/
+    eslint-config/
+    typescript-config/
 
 docs/
 

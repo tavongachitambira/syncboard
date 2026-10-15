@@ -2,7 +2,7 @@
 
 **Project:** SyncBoard
 
-**Version:** 2.0
+**Version:** 2.1
 
 **Status:** Accepted (supersedes v1.0 — see Revision History)
 
@@ -32,10 +32,19 @@ SyncBoard uses **JSON Web Tokens signed with RS256**, generated and verified usi
 
 Two tokens are issued on login:
 
-- **Access token** — short-lived (15 minutes). Contains `userId`, `organizationId`, and `role`. Verified statelessly by any service holding the public key — no database or Redis lookup required to validate it.
-- **Refresh token** — long-lived (7 days), opaque. Only its hash is stored, in Redis, with a TTL matching its lifetime. Used exclusively to mint a new access token.
+- **Access token** — short-lived (15 minutes). Contains `sub` (the user ID), `jti`, `organizationId`, and `role`. Verified statelessly by any service holding the public key — no database or Redis lookup required to validate it.
+- **Refresh token** — long-lived (7 days), opaque. Only its hash is stored, in Redis, with a TTL matching its lifetime. Used exclusively to mint a new token pair. Refresh tokens are rotated: each use deletes the presented token and issues a new one. Presenting a token that is no longer registered is treated as reuse and revokes every refresh token for that user.
 
 Both tokens are delivered to the browser as `HttpOnly; Secure; SameSite=Lax` cookies — never via `localStorage` and never in a JavaScript-readable form — so neither token is reachable via XSS.
+
+Cookie contract:
+
+| Cookie | Path | Lifetime |
+| ------ | ---- | -------- |
+| `access_token` | `/` | 7 days (the cookie outlives the 15-minute JWT; the JWT `exp` claim is the authority) |
+| `refresh_token` | `/api/v1/auth/refresh` | 7 days |
+
+The access-token cookie must outlive the JWT because `/auth/refresh` reads `sub` and `jti` from the expired token to locate the refresh registry entry. The refresh token alone cannot be used without a matching hash in Redis.
 
 ```
 Login
@@ -49,10 +58,10 @@ Both tokens set as HttpOnly cookies
   ↓
 Authenticated requests include the access token cookie automatically
   ↓
-Access token expires → client calls /auth/refresh → refresh token hash validated against Redis → new access token issued
+Access token expires → client calls /auth/refresh → refresh token hash validated against Redis → refresh token rotated, new token pair issued
 ```
 
-Key management: one RS256 key pair is generated per environment. The **private key** signs tokens and is held only by `apps/api`. The **public key** verifies tokens and is distributed to any service that needs to authenticate a caller without being able to forge a token — currently `apps/socket`, and the Next.js route-guard middleware in `apps/web` if it verifies tokens at the edge.
+Key management: one RS256 key pair is generated per environment. The **private key** signs tokens and is held only by `apps/api`. The **public key** verifies tokens and is distributed to any service that needs to authenticate a caller without being able to forge a token — currently `apps/socket`, and the route guard in `apps/web` if it verifies tokens (follow the Next.js 16 conventions referenced in `AGENTS.md`).
 
 API key authentication is unrelated to user tokens and is unchanged: external systems authenticate via the `Authorization: Bearer <API_KEY>` header.
 
@@ -113,7 +122,7 @@ The RS256 private key must never be committed to the repository and must be load
 
 Logout invalidates the refresh token immediately (its hash is deleted from Redis) and clears both cookies. The access token issued before logout remains technically valid until it expires — this is the accepted tradeoff for stateless verification, bounded by the 15-minute lifetime.
 
-Socket.IO middleware verifies the access token on every connection handshake and rejects the connection immediately if it is missing, expired, or fails signature verification.
+Socket.IO middleware verifies the access token on every connection handshake and rejects the connection immediately if it is missing, expired, or fails signature verification. Event handlers re-check the stored `exp` claim in memory on every event; no store lookup is involved.
 
 Authentication middleware in `apps/api` validates the access token on every protected route before any business logic executes.
 
@@ -124,4 +133,5 @@ Authentication middleware in `apps/api` validates the access token on every prot
 | Version | Date    | Change                                                                                                   |
 | ------- | ------- | --------------------------------------------------------------------------------------------------------- |
 | 1.0     | 2025-01 | Original decision: server-side sessions stored in Redis, issued as an opaque cookie.                       |
+| 2.1     | 2026-06 | Clarified: per-event check is an in-memory `exp` comparison; refresh-token rotation and reuse detection; cookie contract; `sub`/`jti` claims. |
 | 2.0     | 2026-06 | Superseded by RS256 JWT (via `jose`) to match the implemented Phase 2 auth — route guards and Socket.IO middleware verify signed tokens rather than looking up a server-side session. See "Alternatives Considered" for the tradeoff. |

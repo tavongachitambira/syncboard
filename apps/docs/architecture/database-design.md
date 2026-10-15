@@ -52,7 +52,7 @@ Design goals:
 | CRDT Operations        | PostgreSQL           |
 | Yjs Snapshot           | PostgreSQL (`BYTEA`) |
 | Files (Future)         | Object Storage       |
-| Session Store (Future) | Redis                |
+| Refresh Token Registry | Redis                |
 
 ---
 

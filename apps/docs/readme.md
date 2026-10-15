@@ -29,10 +29,6 @@
 - [Observability](./engineering/observability.md)
 - [Performance](./engineering/performance.md)
 
-## Learning Log
-
-- [Learning Journal](./log/readme.md)
-
 ## ADRs
 
 - [ADR-01 — Monorepo](./adr/adr-01-monorepo.md)

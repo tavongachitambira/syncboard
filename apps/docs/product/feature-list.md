@@ -50,7 +50,7 @@ SyncBoard consists of the following major systems:
 | Register                    | MVP      |
 | Login                       | MVP      |
 | Logout                      | MVP      |
-| Session Management          | MVP      |
+| Token Management (access/refresh) | MVP |
 | Password Hashing            | MVP      |
 | Forgot Password             | V2       |
 | Reset Password              | V2       |
@@ -273,7 +273,7 @@ The first production release includes:
 * Register
 * Login
 * Logout
-* Sessions
+* Token management
 
 ## Organizations
 

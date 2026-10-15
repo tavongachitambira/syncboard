@@ -37,6 +37,7 @@ The repository layout:
 syncboard/
 ├── apps/
 │   ├── api/
+│   ├── docs/
 │   ├── socket/
 │   └── web/
 ├── packages/
@@ -64,7 +65,7 @@ Turborepo manages the build pipeline, caching, and task orchestration:
 
 ```json
 {
-  "pipeline": {
+  "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": [".next/**", "dist/**"] },
     "lint": { "outputs": [] },
     "typecheck": { "outputs": [] },

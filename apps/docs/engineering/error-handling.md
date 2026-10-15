@@ -195,7 +195,7 @@ export function validate<T>(schema: ZodSchema<T>) {
     const result = schema.safeParse(req.body)
     if (!result.success) {
       const details = Object.fromEntries(
-        result.error.errors.map((e) => [e.path.join("."), e.message])
+        result.error.issues.map((e) => [e.path.join("."), e.message])
       )
       throw new ValidationError(details)
     }
@@ -264,7 +264,7 @@ router.post("/incidents", asyncHandler(async (req, res) => {
 WebSocket event handlers catch errors and emit a structured error event back to the sender.
 
 ```ts
-socket.on("incident:update", async (payload, callback) => {
+socket.on("document.updated", async (payload, callback) => {
   try {
     await incidentService.update(payload)
     callback({ success: true })
@@ -321,7 +321,7 @@ logger.error(
   {
     error,
     incidentId: payload.incidentId,
-    userId: req.auth.userId,
+    userId: req.caller.sub,
     requestId: req.id,
   },
   "Failed to update incident"
@@ -369,7 +369,9 @@ Do not log passwords, tokens, or secrets in error context.
 | Code | Meaning |
 |------|---------|
 | `VALIDATION_ERROR` | Input failed schema validation |
-| `UNAUTHORIZED` | No valid access token |
+| `UNAUTHORIZED` | Authentication required |
+| `MISSING_TOKEN` | No access token cookie present |
+| `EMAIL_TAKEN` | Registration email already in use |
 | `INVALID_CREDENTIALS` | Wrong email or password |
 | `TOKEN_EXPIRED` | Access token has expired (client should call /auth/refresh) |
 | `INVALID_TOKEN` | Token is malformed or fails signature verification |

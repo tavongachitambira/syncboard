@@ -134,7 +134,7 @@ Advantages
 
 - Resistant to XSS token theft (token is not readable by JavaScript)
 - Automatically included by browsers
-- Verifiable by any service holding the public key, with no shared store on the request path — critical for `apps/socket`, which verifies every WebSocket event independently of `apps/api`
+- Verifiable by any service holding the public key, with no shared store on the request path — critical for `apps/socket`, which verifies tokens independently of `apps/api`
 
 ---
 
@@ -344,7 +344,7 @@ Every step must succeed.
 
 Protected routes require:
 
-- Valid session
+- Valid access token
 - Organization membership
 - Required permission
 
@@ -461,11 +461,13 @@ Secure
 
 # Rate Limiting
 
-Authentication
+Registration and login
 
 ```
-20 requests/hour
+20 attempts/hour per IP
 ```
+
+Refresh and current-user requests use the standard API limit.
 
 API
 
@@ -545,7 +547,7 @@ Never expose:
 
 - Password hashes
 - API secrets
-- Session identifiers
+- Token values (access and refresh)
 - Internal IDs where unnecessary
 
 Responses should contain only required fields.
@@ -561,7 +563,9 @@ Environment variables
 ```
 DATABASE_URL
 
-SESSION_SECRET
+JWT_PRIVATE_KEY
+
+JWT_PUBLIC_KEY
 
 REDIS_URL
 
@@ -698,7 +702,7 @@ Every dependency should be:
 Use
 
 ```
-npm audit
+pnpm audit
 
 Dependabot
 
@@ -721,7 +725,7 @@ Never log
 - Passwords
 - Tokens
 - API secrets
-- Session cookies
+- Auth cookies
 
 ---
 
@@ -781,4 +785,4 @@ Version 2
 
 SyncBoard follows a defense-in-depth security model in which authentication, authorization, validation, encryption, and monitoring work together to protect the platform.
 
-Every request is authenticated, every action is authorized, every input is validated, and every critical event is auditable. Tenant isolation, secure session management, and least-privilege access ensure that organizations remain securely separated while providing a safe collaborative environment for incident response.
+Every request is authenticated, every action is authorized, every input is validated, and every critical event is auditable. Tenant isolation, secure token management, and least-privilege access ensure that organizations remain securely separated while providing a safe collaborative environment for incident response.

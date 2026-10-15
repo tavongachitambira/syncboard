@@ -2,11 +2,11 @@
 
 **Project:** SyncBoard
 
-**Version:** 1.0
+**Version:** 1.1
 
-**Status:** Accepted
+**Status:** Accepted (auth section revised to match ADR-02 v2.0)
 
-**Date:** 2025-01
+**Date:** 2025-01 (revised 2026-06)
 
 ---
 
@@ -25,7 +25,7 @@ The solution must:
 - Work reliably across browsers, proxies, and mobile networks
 - Support room-based event scoping (organization rooms, incident rooms)
 - Scale horizontally when a single server is insufficient
-- Integrate with the existing Express session for authentication
+- Authenticate connections with the same RS256 access token as the REST API (ADR-02)
 
 ---
 
@@ -44,7 +44,9 @@ organization:{organizationId}   — org-wide events
 incident:{incidentId}           — incident-specific events
 ```
 
-Authentication uses the existing session cookie on the WebSocket handshake. The Socket.IO middleware verifies the session before establishing the connection.
+Authentication uses the `access_token` cookie sent on the WebSocket handshake. The Socket.IO connection middleware verifies the RS256 signature and expiry with the public key (`jose`) before establishing the connection. `apps/socket` holds only the public key and shares no session code or store lookup with `apps/api`.
+
+The verified claims (`sub`, `organizationId`, `role`, `exp`) are stored on the socket. Every event handler checks `exp` in memory before processing; no Redis or database round-trip is involved. When the token has expired the server emits an authentication error, and the client refreshes via `/auth/refresh` and reconnects.
 
 Horizontal scaling uses `@socket.io/redis-adapter` with Redis Pub/Sub. This allows multiple Socket.IO instances to broadcast events across the cluster.
 
@@ -83,7 +85,7 @@ Rejected because:
 
 - External dependency and per-message cost at scale
 - Less control over event routing and authorization logic
-- WebSocket connection still requires a session authentication layer
+- WebSocket connection still requires an authentication layer
 
 ---
 
@@ -93,7 +95,7 @@ Rejected because:
 
 - Socket.IO handles reconnection, fallback transports, and room management automatically
 - The Redis adapter makes horizontal scaling straightforward — add instances behind a load balancer, configure the adapter, and the event broadcast works transparently
-- The session cookie is included in the WebSocket handshake, so existing session middleware can authenticate WebSocket connections without additional infrastructure
+- The access-token cookie is included in the WebSocket handshake, so connections are authenticated with only the public key and no additional infrastructure
 - Namespaces and rooms provide clean isolation between organizations and incidents
 
 **Negative**
@@ -106,7 +108,7 @@ Rejected because:
 
 # Notes
 
-The Socket.IO server authenticates every connection using the session cookie from the same authentication system as the REST API.
+The Socket.IO server authenticates every connection using the access-token cookie issued by the REST API (ADR-02).
 
 Unauthenticated connections are rejected immediately.
 
@@ -114,4 +116,13 @@ Every event handler verifies that the emitting socket has access to the target r
 
 Presence data is stored in Redis Sorted Sets with TTL, not in PostgreSQL. Presence is ephemeral by design.
 
-Event naming convention: `domain.action` (e.g. `incident.updated`, `presence.joined`).
+Event naming convention: `domain.action` in pure dot notation (e.g. `incident.updated`, `presence.joined`). Scoping is provided by the room, never by a prefix on the event name; room names (`organization:{id}`, `incident:{id}`) are the only place colons appear.
+
+---
+
+# Revision History
+
+| Version | Date    | Change |
+| ------- | ------- | ------ |
+| 1.0     | 2025-01 | Original decision; authentication via the Express session cookie. |
+| 1.1     | 2026-06 | Authentication updated to the RS256 access-token cookie per ADR-02 v2.0; event naming clarified. |

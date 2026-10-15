@@ -104,14 +104,14 @@ SyncBoard is composed of the following major subsystems.
 
 * User registration
 * Login
-* Session management
+* Token management (access and refresh)
 * Authorization
 * Identity management
 
 ### Owns
 
 * Users
-* Sessions
+* Refresh tokens
 * Credentials
 * Roles
 
@@ -421,7 +421,9 @@ shared/
 
 ui/
 
-config/
+eslint-config/
+
+typescript-config/
 ```
 
 Infrastructure:
@@ -446,7 +448,7 @@ Object Storage (Future)
 | --------------- | ------------------------ |
 | Next.js         | Web application          |
 | React           | UI rendering             |
-| Express/Fastify | REST API                 |
+| Express         | REST API                 |
 | Socket.IO       | Real-time communication  |
 | PostgreSQL      | Persistent storage       |
 | Prisma          | Database ORM             |

@@ -162,6 +162,8 @@ Socket Established
 
 Unauthenticated, expired, or invalid-signature connections are rejected.
 
+Verified claims (`sub`, `organizationId`, `role`, `exp`) are stored on the socket. Every event handler re-checks `exp` in memory before processing — no Redis or database lookup. An expired token yields an authentication error; the client refreshes via `/auth/refresh` and reconnects.
+
 ---
 
 # Room Structure
@@ -228,12 +230,14 @@ Disconnect automatically removes users.
 
 ## Organization Events
 
+Emitted to the `organization:{organizationId}` room.
+
 ```
-organization:incident.created
+incident.created
 
-organization:member.invited
+member.invited
 
-organization:notification.created
+notification.created
 ```
 
 ---
@@ -746,12 +750,14 @@ incident.updated
 
 incident.resolved
 
-comment.created
+incident.comment.created
 
 presence.updated
 
 notification.created
 ```
+
+Event names use pure dot notation. The room provides scope; names never carry a room prefix. Colons appear only in room names (`organization:{id}`, `incident:{id}`).
 
 ---
 

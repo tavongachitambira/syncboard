@@ -37,7 +37,7 @@ SyncBoard uses **Redis** for:
 1. **Presence tracking** — Redis Sorted Sets with a score of the last-seen timestamp. Presence expires via TTL.
 2. **Socket.IO Pub/Sub** — `@socket.io/redis-adapter` uses Redis Pub/Sub channels to broadcast events across Socket.IO instances.
 3. **Rate limiting** — Redis atomic `INCR` with `EXPIRE` for sliding window counters per IP/user.
-4. **Refresh token registry** — a SHA-256 hash of each issued refresh token is stored as a Redis key with a TTL equal to the token's 7-day lifetime. Logout deletes the key, revoking the token immediately. `/auth/refresh` checks the hash exists before issuing a new access token.
+4. **Refresh token registry** — a SHA-256 hash of each issued refresh token is stored under the key `refresh:{userId}:{jti}` with a TTL equal to the token's 7-day lifetime. Logout deletes the key, revoking the token immediately. `/auth/refresh` checks the stored hash matches, deletes the key, and issues a new token pair (rotation). A missing or mismatched entry is treated as reuse and every `refresh:{userId}:*` key is deleted.
 
 Presence data structure:
 

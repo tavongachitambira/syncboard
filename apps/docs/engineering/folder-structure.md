@@ -268,13 +268,13 @@ Shared TypeScript types, Zod schemas, and constants.
 ```
 packages/shared/
 ├── src/
-│   ├── events/
-│   │   └── index.ts     — Socket.IO event name constants
+│   ├── constants/
+│   │   └── events.ts    — Socket.IO event name constants
 │   ├── schemas/
-│   │   └── index.ts     — Zod schemas shared between apps
-│   ├── types/
-│   │   └── index.ts     — TypeScript types shared between apps
-│   └── index.ts
+│   │   ├── auth.ts      — Zod schemas shared between apps
+│   │   └── payloads.ts  — Socket.IO payload schemas
+│   ├── types/           — TypeScript types shared between apps
+│   └── index.ts         — Public entry point (barrel permitted)
 ├── package.json
 └── tsconfig.json
 ```

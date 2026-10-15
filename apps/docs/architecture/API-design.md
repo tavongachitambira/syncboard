@@ -57,8 +57,10 @@ http://localhost:4000/api/v1
 Production
 
 ```
-https://api.syncboard.com/v1
+https://api.syncboard.com/api/v1
 ```
+
+The `/api/v1` prefix is part of the application mount; the reverse proxy must not strip it.
 
 ---
 
@@ -69,12 +71,14 @@ Two authentication mechanisms are supported.
 ## User Authentication
 
 ```
-JWT (RS256), delivered as HttpOnly cookies
+JWT (RS256), delivered as HttpOnly cookies (`access_token`, `refresh_token`)
 ```
 
 Used by:
 
 - Web Application
+
+Wire values for enumerations (`status`, `severity`, roles) are SCREAMING_SNAKE_CASE, matching the Prisma enums.
 
 Access tokens are short-lived (15 minutes) and verified statelessly. Refresh tokens are long-lived (7 days) and exchanged for a new access token via `/auth/refresh`.
 
@@ -128,6 +132,7 @@ Validation error
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
+    "message": "Validation failed.",
     "details": {
       "title": "Required",
       "severity": "Invalid value"
@@ -214,7 +219,8 @@ Request
 {
   "email": "john@example.com",
   "password": "********",
-  "displayName": "John"
+  "displayName": "John",
+  "organizationName": "Acme Inc"
 }
 ```
 
@@ -224,11 +230,13 @@ Response
 {
   "success": true,
   "data": {
-    "userId": "...",
-    "organizationId": "..."
+    "user": {},
+    "organization": {}
   }
 }
 ```
+
+Creates the organization and its Owner in one transaction, sets both token cookies, and returns `201`. Returns `409 EMAIL_TAKEN` if the email exists.
 
 ---
 
@@ -240,6 +248,8 @@ POST
 /auth/login
 ```
 
+Request: `{ "email", "password" }`. Sets both token cookies and returns `{ user, organization }`. Returns `401 INVALID_CREDENTIALS` for an unknown email or wrong password (identical response and timing).
+
 ---
 
 ## Logout
@@ -249,6 +259,8 @@ POST
 ```
 /auth/logout
 ```
+
+Deletes the refresh-token registry entry and clears both cookies.
 
 ---
 
@@ -260,7 +272,7 @@ POST
 /auth/refresh
 ```
 
-Exchanges a valid, unrevoked refresh token cookie for a new access token cookie. Returns `401` if the refresh token is missing, expired, or revoked.
+Exchanges a valid, unrevoked refresh token cookie for a new token pair (the refresh token is rotated). Returns `401` with `MISSING_TOKEN`, `INVALID_TOKEN`, or `REFRESH_TOKEN_REVOKED` if the token is missing, malformed, or revoked or reused.
 
 ---
 
@@ -271,6 +283,8 @@ GET
 ```
 /auth/me
 ```
+
+Requires a valid access token. Returns `{ user, organization }`.
 
 ---
 
@@ -440,7 +454,7 @@ Request
 ```json
 {
   "title": "Payments API timeout",
-  "severity": "critical",
+  "severity": "CRITICAL",
   "serviceId": "...",
   "assignees": [
     "...",
@@ -644,7 +658,7 @@ Collection endpoints return:
 Example
 
 ```
-GET /incidents?status=open&severity=critical
+GET /incidents?status=OPEN&severity=CRITICAL
 ```
 
 ---
@@ -698,11 +712,13 @@ API Keys
 1000 requests/minute
 ```
 
-Authentication
+Registration and login only
 
 ```
-20 login attempts/hour
+20 attempts/hour per IP
 ```
+
+`/auth/refresh` and `/auth/me` fall under the normal user limit.
 
 ---
 
@@ -757,17 +773,23 @@ Authentication
 ```
 UNAUTHORIZED
 
+MISSING_TOKEN
+
 INVALID_CREDENTIALS
 
-SESSION_EXPIRED
+TOKEN_EXPIRED
+
+INVALID_TOKEN
+
+REFRESH_TOKEN_REVOKED
+
+EMAIL_TAKEN
 ```
 
 Validation
 
 ```
 VALIDATION_ERROR
-
-INVALID_INPUT
 ```
 
 Incident
@@ -796,8 +818,6 @@ Permissions
 
 ```
 FORBIDDEN
-
-INSUFFICIENT_PERMISSIONS
 ```
 
 ---

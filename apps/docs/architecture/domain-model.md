@@ -639,12 +639,13 @@ Deleting an organization removes every owned resource.
 
 | Entity       | Owner  | Admin | Engineer      | Viewer |
 | ------------ | ------ | ----- | ------------- | ------ |
-| Organization | Manage | View  | View          | View   |
+| Organization | Manage | Read/Update | Read | Read |
 | Service      | CRUD   | CRUD  | Read          | Read   |
 | Incident     | CRUD   | CRUD  | Create/Update | Read   |
 | Comment      | CRUD   | CRUD  | CRUD          | Read   |
 | Activity     | Read   | Read  | Read          | Read   |
 | Notification | Own    | Own   | Own           | Own    |
+| API Key      | CRUD   | CRUD  | Read          | None   |
 
 ---
 

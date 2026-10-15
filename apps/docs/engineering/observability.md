@@ -85,7 +85,7 @@ Always log:
 Never log:
 
 - Passwords, tokens, or API secrets
-- Session identifiers
+- Token values or auth cookies
 - Personal data (email, display name) unless necessary for debugging
 - Request/response bodies by default (too verbose and may contain sensitive data)
 

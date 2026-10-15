@@ -433,7 +433,8 @@ Communicate Updates
 | Manage API Keys         |   ✅   |   ✅   |     ❌    |    ❌   |
 | Configure Notifications |   ✅   |   ✅   |     ❌    |    ❌   |
 | View Audit Log          |   ✅   |   ✅   |     ✅    |    ✅   |
-| Manage Organization     |   ✅   |   ❌   |     ❌    |    ❌   |
+| Update Organization Settings |   ✅   |   ✅   |     ❌    |    ❌   |
+| Delete / Transfer Organization |   ✅   |   ❌   |     ❌    |    ❌   |
 
 ---
 

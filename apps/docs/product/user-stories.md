@@ -57,7 +57,7 @@ So that I can continue working on incidents.
 
 * User can authenticate with valid credentials.
 * Invalid credentials return an error.
-* Session persists after page refresh.
+* Authentication persists across page refresh (access token refreshed transparently).
 * Protected pages require authentication.
 
 ---
@@ -72,7 +72,7 @@ So that no one else can access my account.
 
 ### Acceptance Criteria
 
-* Session is destroyed.
+* Refresh token is revoked server-side.
 * Cookies are removed.
 * User is redirected to the login page.
 

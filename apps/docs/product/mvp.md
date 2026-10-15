@@ -112,7 +112,7 @@ Included:
 * User registration
 * Login
 * Logout
-* Session management
+* Token management (access and refresh)
 * Protected routes
 
 Excluded:
@@ -278,7 +278,7 @@ The MVP should satisfy the following quality goals.
 ## Security
 
 * Passwords are hashed.
-* Sessions are secure.
+* Tokens are secure (HttpOnly cookies).
 * Role-based authorization.
 * API keys are securely stored.
 * Input validation on all endpoints.

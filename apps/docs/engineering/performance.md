@@ -89,7 +89,8 @@ Assignment(userId)
 Activity(incidentId, createdAt)
 Operation(incidentId, createdAt)
 Comment(incidentId, createdAt)
-Notification(userId, read, createdAt)
+Notification(recipientId, status)
+Notification(recipientId, createdAt)
 ```
 
 ---
