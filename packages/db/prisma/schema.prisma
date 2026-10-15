@@ -7,12 +7,22 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ENUMS
-// Values are SCREAMING_SNAKE_CASE to exactly match the `as const` objects in
-// packages/shared/src/types/incident.ts and user.ts. If they drift, Prisma
-// call sites in apps/api will surface type errors at compile time.
-// ─────────────────────────────────────────────────────────────────────────────
+// Enum values are SCREAMING_SNAKE_CASE and mirror the `as const` objects in
+// packages/shared (types/incident.ts, types/user.ts). packages/shared is the
+// source of truth for the wire values; keep these in sync by hand.
+//
+// Referential actions: parent -> child ownership uses Cascade (see the cascade
+// table in apps/docs/architecture/database-design.md). References to people and
+// services use NoAction instead of Restrict. Both block a delete that would
+// orphan a row, but NoAction is checked at the end of the statement, so
+// deleting an organization can still cascade through every table at once.
+
+enum UserRole {
+  OWNER
+  ADMIN
+  ENGINEER
+  VIEWER
+}
 
 enum IncidentStatus {
   OPEN
@@ -29,27 +39,38 @@ enum Severity {
 }
 
 enum OpState {
-  PENDING    // not yet incorporated into a snapshot
-  CONFIRMED  // acknowledged by the server and persisted
-  FAILED     // rejected — client should discard and re-sync
+  PENDING
+  CONFIRMED
+  FAILED
 }
 
+// Operation.payload is a binary Yjs update, so there is only one kind today.
+// Structured field changes go through the REST API, not the operation log.
 enum OperationType {
-  TEXT  // Yjs CRDT delta — collaborative notes
-  FIELD // structured field mutation: status, severity, title, etc.
+  YJS_UPDATE
 }
 
-enum UserRole {
-  OWNER
-  ADMIN
-  ENGINEER
-  VIEWER
+enum ActivityType {
+  INCIDENT_CREATED
+  STATUS_CHANGED
+  SEVERITY_CHANGED
+  TITLE_CHANGED
+  ASSIGNED
+  UNASSIGNED
+  COMMENT_ADDED
+  RESOLVED
 }
 
-enum BillingStatus {
-  ACTIVE
-  PAST_DUE
-  CANCELLED
+enum NotificationType {
+  ASSIGNMENT
+  INCIDENT_CREATED
+  MENTION
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
 }
 
 enum InvitationStatus {
@@ -58,44 +79,40 @@ enum InvitationStatus {
   REVOKED
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODELS
-// ─────────────────────────────────────────────────────────────────────────────
-
 model Organization {
-  id               String        @id @default(uuid())
-  name             String
-  slug             String        @unique
-  stripeCustomerId String?       @unique
-  billingStatus    BillingStatus @default(ACTIVE)
-  createdAt        DateTime      @default(now())
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   users         User[]
   services      Service[]
   incidents     Incident[]
-  subscription  Subscription?
-  billingEvents BillingEvent[]
   invitations   Invitation[]
+  apiKeys       ApiKey[]
+  notifications Notification[]
 }
 
 model User {
   id             String   @id @default(uuid())
   email          String   @unique
   passwordHash   String
-  role           UserRole @default(VIEWER)
-  organizationId String
   displayName    String
   avatarUrl      String?
+  role           UserRole @default(VIEWER)
+  organizationId String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization        Organization       @relation(fields: [organizationId], references: [id])
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownedServices       Service[]
   incidentAssignments IncidentAssignee[]
   operations          Operation[]
-  sentInvitations     Invitation[]       @relation("InvitationSender")
-  ownedServices       Service[]          @relation("ServiceOwner")
   comments            Comment[]
   activities          Activity[]
+  notifications       Notification[]
+  sentInvitations     Invitation[]
 
   @@index([organizationId])
   @@index([role, organizationId])
@@ -110,8 +127,8 @@ model Service {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  owner        User         @relation("ServiceOwner", fields: [ownerId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User         @relation(fields: [ownerId], references: [id], onDelete: NoAction)
   incidents    Incident[]
 
   @@unique([organizationId, name])
@@ -121,40 +138,40 @@ model Service {
 model Incident {
   id             String         @id @default(uuid())
   organizationId String
-  serviceId      String?
+  serviceId      String
   title          String
-  status         IncidentStatus @default(OPEN)
   severity       Severity
-  yjsSnapshot    Bytes?
+  status         IncidentStatus @default(OPEN)
+  // Optimistic concurrency for structured fields; notes are handled by Yjs.
   version        Int            @default(1)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   resolvedAt     DateTime?
 
-  organization Organization       @relation(fields: [organizationId], references: [id])
-  service      Service?           @relation(fields: [serviceId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  service      Service            @relation(fields: [serviceId], references: [id], onDelete: NoAction)
   assignees    IncidentAssignee[]
-  operations   Operation[]
   comments     Comment[]
   activities   Activity[]
+  operations   Operation[]
+  document     IncidentDocument?
 
   @@index([organizationId, status])
+  @@index([serviceId, status])
   @@index([severity])
   @@index([updatedAt])
-  @@index([serviceId])
 }
 
-// Junction table — an incident can have multiple assignees
 model IncidentAssignee {
   incidentId String
   userId     String
   assignedAt DateTime @default(now())
 
-  incident Incident @relation(fields: [incidentId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([incidentId, userId])
-  @@index([userId]) // "all incidents assigned to user X"
+  @@index([userId])
 }
 
 model Comment {
@@ -165,73 +182,91 @@ model Comment {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  incident Incident @relation(fields: [incidentId], references: [id])
-  author   User     @relation(fields: [authorId], references: [id])
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id], onDelete: NoAction)
 
-  @@index([incidentId])
+  @@index([incidentId, createdAt])
+  @@index([authorId, createdAt])
 }
 
+// Append-only audit trail: rows are never updated or deleted by the app.
 model Activity {
-  id         String   @id @default(uuid())
+  id         String       @id @default(uuid())
   incidentId String
   actorId    String
-  type       String
+  type       ActivityType
   payload    Json
-  createdAt  DateTime @default(now())
+  createdAt  DateTime     @default(now())
 
-  incident Incident @relation(fields: [incidentId], references: [id])
-  actor    User     @relation(fields: [actorId], references: [id])
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  actor    User     @relation(fields: [actorId], references: [id], onDelete: NoAction)
 
   @@index([incidentId, createdAt])
 }
 
+// Latest Yjs snapshot of the shared notes. One per incident.
+model IncidentDocument {
+  incidentId String   @id
+  snapshot   Bytes
+  version    Int      @default(1)
+  updatedAt  DateTime @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+}
+
+// Immutable log of Yjs updates. messageId is the client-generated id, unique so
+// replaying the log never applies the same update twice.
 model Operation {
   id         String        @id @default(uuid())
   incidentId String
   authorId   String
-  type       OperationType
-  payload    Json
-  opState    OpState       @default(PENDING)
   messageId  String        @unique
+  type       OperationType @default(YJS_UPDATE)
+  payload    Bytes
+  state      OpState       @default(PENDING)
   createdAt  DateTime      @default(now())
 
-  incident Incident @relation(fields: [incidentId], references: [id])
-  author   User     @relation(fields: [authorId], references: [id])
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id], onDelete: NoAction)
 
   @@index([incidentId, createdAt])
 }
 
-model Subscription {
-  id                   String   @id @default(uuid())
-  organizationId       String   @unique
-  stripeSubscriptionId String   @unique
-  stripeSeatItemId     String
-  stripeIncidentItemId String
-  status               String
-  currentPeriodEnd     DateTime
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+model Notification {
+  id             String             @id @default(uuid())
+  organizationId String
+  recipientId    String
+  type           NotificationType
+  payload        Json
+  status         NotificationStatus @default(UNREAD)
+  createdAt      DateTime           @default(now())
+  readAt         DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipient    User         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@index([recipientId, status])
+  @@index([recipientId, createdAt])
 }
 
-model BillingEvent {
+// Only the SHA-256 hash of the secret is stored. Keys are revoked, not deleted.
+model ApiKey {
   id             String    @id @default(uuid())
   organizationId String
-  stripeEventId  String    @unique
-  type           String
-  processedAt    DateTime?
-  raw            Json
+  name           String
+  hashedSecret   String    @unique
   createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
 }
 
-// A pending request for someone to join an organization. The raw token is
-// only ever held by the invitee's link — only its hash is persisted, same
-// pattern as refresh tokens and API keys (see ADR-02, security-design.md).
+// Only the hash of the invitation token is stored (same pattern as refresh
+// tokens and API keys).
 model Invitation {
   id             String           @id @default(uuid())
   organizationId String
@@ -244,8 +279,8 @@ model Invitation {
   createdAt      DateTime         @default(now())
   acceptedAt     DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  invitedBy    User         @relation("InvitationSender", fields: [invitedById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation(fields: [invitedById], references: [id], onDelete: NoAction)
 
   @@index([organizationId])
   @@index([email])
