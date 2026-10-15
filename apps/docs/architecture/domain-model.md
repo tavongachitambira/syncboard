@@ -124,7 +124,7 @@ Everything inside SyncBoard exists within an organization.
 
 ## Business Rules
 
-* Organization names are unique within the platform.
+* Organization slugs are unique within the platform; names are not (a slug collision is resolved by appending a numeric suffix).
 * Every organization has exactly one owner.
 * Members cannot exist without an organization.
 * Data cannot be shared across organizations.
