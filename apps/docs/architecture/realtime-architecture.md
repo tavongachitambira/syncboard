@@ -162,7 +162,7 @@ Socket Established
 
 Unauthenticated, expired, or invalid-signature connections are rejected.
 
-Verified claims (`sub`, `organizationId`, `role`, `exp`) are stored on the socket. Every event handler re-checks `exp` in memory before processing — no Redis or database lookup. An expired token yields an authentication error; the client refreshes via `/auth/refresh` and reconnects.
+Verified claims (`sub`, `organizationId`, `role`, `exp`) are stored on the socket. Two checks keep a connection from outliving its token, neither needing a Redis or database lookup: a timer closes the connection at `exp`, and a guard re-checks `exp` in memory before every inbound event. In both cases the server emits `auth.expired` and disconnects; the client refreshes via `/auth/refresh` and reconnects with the new cookie. Handshake rejections carry the error code in `err.data.code` (`MISSING_TOKEN`, `TOKEN_EXPIRED`, `INVALID_TOKEN`). The handshake `Origin` header must match the web origin, because CORS does not apply to WebSocket upgrades.
 
 ---
 
@@ -265,6 +265,16 @@ incident.activity.created
 
 incident.resolved
 ```
+
+---
+
+## Connection Events
+
+```
+auth.expired
+```
+
+Emitted by the server to a single socket when its access token expires. Not sent to a room.
 
 ---
 

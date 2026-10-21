@@ -1,43 +1,40 @@
-import {parseCookie} from "cookie"
-import { jwtVerify, importSPKI } from "jose"
-import { env } from "../env.js"
-import type { JwtPayload } from "@workspace/shared"
+import { parseCookie } from "cookie"
+import { errors, importSPKI, jwtVerify } from "jose"
 import type { Socket } from "socket.io"
+import {
+  ACCESS_TOKEN_COOKIE,
+  ErrorCode,
+  jwtPayloadSchema,
+} from "@workspace/shared"
+import { env } from "../env.js"
 
 const ALG = "RS256"
-let _publicKey: CryptoKey | undefined
 
-async function getPublicKey(): Promise<CryptoKey> {
-  _publicKey ??= await importSPKI(
-    env.JWT_PUBLIC_KEY.replace(/\\n/g, "\n"),
-    ALG,
-  )
-  return _publicKey
+let publicKey: Promise<CryptoKey> | undefined
+function getPublicKey(): Promise<CryptoKey> {
+  publicKey ??= importSPKI(env.JWT_PUBLIC_KEY.replace(/\\n/g, "\n"), ALG)
+  return publicKey
 }
 
-// Augment Socket so event handlers can access caller without casting
-declare module "socket.io" {
-  interface Socket {
-    caller: JwtPayload
-  }
+// Socket.IO delivers err.message and err.data to the client's connect_error
+// handler. The code in data lets the client decide: TOKEN_EXPIRED means
+// refresh via /auth/refresh and reconnect; anything else means sign in again.
+function reject(code: ErrorCode, message: string): Error & { data: object } {
+  return Object.assign(new Error(message), { data: { code } })
 }
 
+// Connection middleware (ADR-03, ADR-02): verifies the access-token cookie sent
+// on the handshake with the public key only. No call to apps/api, no store.
 export async function authenticate(
   socket: Socket,
-  next: (err?: Error) => void,
+  next: (error?: Error) => void
 ): Promise<void> {
-  const cookieHeader = socket.handshake.headers.cookie
+  const header = socket.handshake.headers.cookie
+  const token =
+    header === undefined ? undefined : parseCookie(header)[ACCESS_TOKEN_COOKIE]
 
-  if (!cookieHeader) {
-    next(new Error("MISSING_TOKEN"))
-    return
-  }
-
-  const cookies = parseCookie(cookieHeader)
-  const token = cookies["access_token"]
-
-  if (!token) {
-    next(new Error("MISSING_TOKEN"))
+  if (token === undefined || token.length === 0) {
+    next(reject(ErrorCode.MISSING_TOKEN, "Authentication required."))
     return
   }
 
@@ -45,9 +42,13 @@ export async function authenticate(
     const { payload } = await jwtVerify(token, await getPublicKey(), {
       algorithms: [ALG],
     })
-    socket.caller = payload as unknown as JwtPayload
+    socket.caller = jwtPayloadSchema.parse(payload)
     next()
-  } catch {
-    next(new Error("ACCESS_TOKEN_EXPIRED"))
+  } catch (error) {
+    if (error instanceof errors.JWTExpired) {
+      next(reject(ErrorCode.TOKEN_EXPIRED, "Access token expired."))
+      return
+    }
+    next(reject(ErrorCode.INVALID_TOKEN, "Invalid access token."))
   }
 }

@@ -6,6 +6,11 @@
 //   incident:{incidentId}          — incident-specific and presence events
 
 export const SocketEvents = {
+  // ── Connection ─────────────────────────────────────────────────────────────
+  // Server -> client when the access token expires. The client refreshes via
+  // /auth/refresh and reconnects.
+  AUTH_EXPIRED: "auth.expired",
+
   // ── Organization room ─────────────────────────────────────────────────────
   INCIDENT_CREATED: "incident.created",
   MEMBER_INVITED: "member.invited",
