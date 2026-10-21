@@ -1,14 +1,23 @@
-import bcrypt from "bcrypt"
+import { randomUUID } from "node:crypto"
+import { compare, hash } from "bcryptjs"
 
-const ROUNDS = 12
+const COST = 12
 
-export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, ROUNDS)
+export function hashPassword(plain: string): Promise<string> {
+  return hash(plain, COST)
 }
 
-export async function verifyPassword(
+export function verifyPassword(
   plain: string,
-  hash: string,
+  hashed: string
 ): Promise<boolean> {
-  return bcrypt.compare(plain, hash)
+  return compare(plain, hashed)
 }
+
+// A real bcrypt hash to compare against when the email is unknown, so login
+// takes the same time whether or not the account exists.
+let dummyHash: Promise<string> | undefined
+export function getDummyHash(): Promise<string> {
+  dummyHash ??= hash(randomUUID(), COST)
+  return dummyHash
+} 

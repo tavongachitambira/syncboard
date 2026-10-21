@@ -1,4 +1,4 @@
-import {prisma as db} from "@workspace/db"
+import { prisma as db } from "../../lib/prisma.js"
 import { AppError } from "../../lib/errors.js"
 import type { CreateCommentInput, UpdateCommentInput, CommentResponse } from "@workspace/shared"
 
@@ -32,7 +32,7 @@ export async function listComments(
     where: { id: incidentId, organizationId },
   })
   if (incident === null) {
-    throw new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found")
+    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
 
   const comments = await db.comment.findMany({
@@ -53,7 +53,7 @@ export async function createComment(
     where: { id: incidentId, organizationId },
   })
   if (incident === null) {
-    throw new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found")
+    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
 
   const comment = await db.$transaction(async (tx) => {
@@ -86,10 +86,10 @@ export async function updateComment(
     include: { author: true },
   })
   if (comment === null) {
-    throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found")
+    throw new AppError("COMMENT_NOT_FOUND", "Comment not found", 404)
   }
   if (comment.authorId !== actorId) {
-    throw new AppError(403, "FORBIDDEN", "You can only edit your own comments")
+    throw new AppError("FORBIDDEN", "You can only edit your own comments", 403)
   }
 
   const updated = await db.comment.update({
@@ -110,14 +110,14 @@ export async function deleteComment(
     where: { id: commentId, incident: { organizationId } },
   })
   if (comment === null) {
-    throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found")
+    throw new AppError("COMMENT_NOT_FOUND", "Comment not found", 404)
   }
 
   const isOwner = comment.authorId === actorId
   const isAdmin = actorRole === "ADMIN" || actorRole === "OWNER"
 
   if (!isOwner && !isAdmin) {
-    throw new AppError(403, "FORBIDDEN", "You can only delete your own comments")
+    throw new AppError("FORBIDDEN", "You can only delete your own comments", 403)
   }
 
   await db.comment.delete({ where: { id: commentId } })

@@ -28,7 +28,7 @@ membersRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     const parsed = inviteMemberSchema.safeParse(req.body)
     if (!parsed.success) {
-      next(new AppError(400, "VALIDATION_ERROR", "Validation failed"))
+      next(new AppError("VALIDATION_ERROR", "Validation failed", 400))
       return
     }
     const result = await membersService
@@ -45,7 +45,7 @@ membersRouter.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     const parsed = updateRoleSchema.safeParse(req.body)
     if (!parsed.success) {
-      next(new AppError(400, "VALIDATION_ERROR", "Validation failed"))
+      next(new AppError("VALIDATION_ERROR", "Validation failed", 400))
       return
     }
     const result = await membersService

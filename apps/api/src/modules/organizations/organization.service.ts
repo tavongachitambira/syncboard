@@ -1,4 +1,4 @@
-import { prisma as db } from "@workspace/db"
+import { prisma as db } from "../../lib/prisma.js"
 import { AppError } from "../../lib/errors.js"
 import type { OrganizationResponse, UpdateOrganizationInput } from "@workspace/shared"
 
@@ -8,7 +8,7 @@ function toResponse(org: { id: string; name: string; slug: string; createdAt: Da
 
 export async function getOrganization(organizationId: string): Promise<OrganizationResponse> {
   const org = await db.organization.findUnique({ where: { id: organizationId } })
-  if (org === null) throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found")
+  if (org === null) throw new AppError("ORGANIZATION_NOT_FOUND", "Organization not found", 404)
   return toResponse(org)
 }
 

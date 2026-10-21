@@ -26,19 +26,6 @@ export const NotificationStatus = {
 export type NotificationStatus =
   (typeof NotificationStatus)[keyof typeof NotificationStatus]
 
-// ─── JWT ─────────────────────────────────────────────────────────────────────
-// Custom claims carried in the RS256 access token.
-// Shared between apps/api (signing) and apps/socket (verification).
-
-export type JwtPayload = {
-  sub: string // userId
-  jti: string // token id — used as the Redis key suffix for refresh-token lookups
-  organizationId: string
-  role: UserRole
-  iat: number
-  exp: number
-}
-
 // ─── Presence ─────────────────────────────────────────────────────────────────
 
 export type PresenceUser = {
@@ -47,7 +34,7 @@ export type PresenceUser = {
   avatarUrl: string | null
 }
 
-// ─── API Envelope ─────────────────────────────────────────────────────────────
+// ─── API envelope ─────────────────────────────────────────────────────────────
 // Shared so apps/web can type API client responses without re-declaring.
 
 export type ApiSuccess<T> = { success: true; data: T }
@@ -66,7 +53,7 @@ export type PaginationMeta = {
   pages: number
 }
 
-// ─── Resource Responses ───────────────────────────────────────────────────────
+// ─── Resource responses ───────────────────────────────────────────────────────
 
 export type UserResponse = {
   id: string

@@ -1,42 +1,50 @@
-import Redis from "ioredis"
+import { Redis } from "ioredis"
+import { REFRESH_TOKEN_TTL_SECONDS } from "@workspace/shared"
 import { env } from "../env.js"
-import { REFRESH_TTL_S } from "./tokens.js"
+import { logger } from "./logger.js"
 
-export const redis = new Redis(env.REDIS_URL, { lazyConnect: true })
+export const redis = new Redis(env.REDIS_URL, {
+  lazyConnect: true,
+  maxRetriesPerRequest: 3,
+})
 
-// Key: refresh:{userId}:{tokenId}  value: sha256(rawRefreshToken)
-const key = (userId: string, tokenId: string): string =>
-  `refresh:${userId}:${tokenId}`
+redis.on("error", (error: Error) => {
+  logger.error({ error }, "Redis error")
+})
+
+// Registry of live refresh tokens (ADR-02, ADR-06).
+// Key: refresh:{userId}:{jti}   Value: sha256(rawRefreshToken)
+const key = (userId: string, jti: string): string => `refresh:${userId}:${jti}`
 
 export const refreshTokens = {
-  
-  async set(
-    userId: string,
-    tokenId: string,
-    tokenHash: string,
-  ): Promise<void> {
-    await redis.set(key(userId, tokenId), tokenHash, "EX", REFRESH_TTL_S)
+  async set(userId: string, jti: string, tokenHash: string): Promise<void> {
+    await redis.set(
+      key(userId, jti),
+      tokenHash,
+      "EX",
+      REFRESH_TOKEN_TTL_SECONDS
+    )
   },
 
-  async get(userId: string, tokenId: string): Promise<string | null> {
-    return redis.get(key(userId, tokenId))
+  // Reads and deletes in one atomic step, so a token can be redeemed once.
+  consume(userId: string, jti: string): Promise<string | null> {
+    return redis.getdel(key(userId, jti))
   },
 
-  async delete(userId: string, tokenId: string): Promise<void> {
-    await redis.del(key(userId, tokenId))
+  async delete(userId: string, jti: string): Promise<void> {
+    await redis.del(key(userId, jti))
   },
 
-  // Reuse detection response — nuke every session for this user
+  // Reuse detection: revoke every refresh token this user holds.
   async deleteAll(userId: string): Promise<void> {
-    const pattern = `refresh:${userId}:*`
     let cursor = "0"
     do {
       const [next, keys] = await redis.scan(
         cursor,
         "MATCH",
-        pattern,
+        `refresh:${userId}:*`,
         "COUNT",
-        100,
+        100
       )
       if (keys.length > 0) await redis.del(...keys)
       cursor = next

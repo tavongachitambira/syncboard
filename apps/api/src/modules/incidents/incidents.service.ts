@@ -1,4 +1,4 @@
-import { prisma as db } from "@workspace/db"
+import { prisma as db } from "../../lib/prisma.js"
 import { AppError } from "../../lib/errors.js"
 import type {
   CreateIncidentInput,
@@ -6,6 +6,7 @@ import type {
   ListIncidentsInput,
   IncidentResponse,
   PaginationMeta,
+  ActivityType,
 } from "@workspace/shared"
 import type { Prisma } from "@workspace/db"
 
@@ -75,7 +76,7 @@ export async function getIncident(
     include: { assignees: { include: { user: true } } },
   })
   if (incident === null) {
-    throw new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found")
+    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
   return toIncidentResponse(incident)
 }
@@ -90,7 +91,7 @@ export async function createIncident(
     where: { id: input.serviceId, organizationId },
   })
   if (service === null) {
-    throw new AppError(404, "SERVICE_NOT_FOUND", "Service not found")
+    throw new AppError("SERVICE_NOT_FOUND", "Service not found", 404)
   }
 
   // Verify all assignees are members of this org
@@ -100,7 +101,7 @@ export async function createIncident(
       select: { id: true },
     })
     if (members.length !== input.assignees.length) {
-      throw new AppError(400, "INVALID_ASSIGNEE", "One or more assignees are not members of this organization")
+      throw new AppError("INVALID_ASSIGNEE", "One or more assignees are not members of this organization", 400)
     }
   }
 
@@ -147,21 +148,17 @@ export async function updateIncident(
     where: { id: incidentId, organizationId },
   })
   if (incident === null) {
-    throw new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found")
+    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
 
   // Optimistic concurrency check
   if (input.version !== undefined && incident.version !== input.version) {
-    throw new AppError(
-      409,
-      "VERSION_CONFLICT",
-      "Incident was modified by another user. Please refresh and try again.",
-    )
+    throw new AppError("VERSION_CONFLICT", "Incident was modified by another user. Please refresh and try again.", 409)
   }
 
   const { version: _version, ...fields } = input
 
-  const activities: { type: string; payload: Record<string, unknown> }[] = []
+  const activities: { type: ActivityType; payload: Record<string, unknown> }[] = []
 
   if (fields.title !== undefined && fields.title !== incident.title) {
     activities.push({
@@ -207,10 +204,10 @@ export async function resolveIncident(
 ): Promise<IncidentResponse> {
   const incident = await db.incident.findFirst({ where: { id: incidentId, organizationId }, include: { assignees: { include: { user: true } } } })
   if (incident === null) {
-    throw new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found")
+    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
   if (incident.status === "RESOLVED") {
-    throw new AppError(409, "INCIDENT_ALREADY_RESOLVED", "Incident is already resolved")
+    throw new AppError("INCIDENT_ALREADY_RESOLVED", "Incident is already resolved", 409)
   }
 
   const resolved = await db.$transaction(async (tx) => {
@@ -253,10 +250,10 @@ export async function addAssignment(
   ])
 
   if (incident === null) {
-    throw new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found")
+    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
   if (member === null) {
-    throw new AppError(404, "MEMBER_NOT_FOUND", "Member not found in this organization")
+    throw new AppError("MEMBER_NOT_FOUND", "Member not found in this organization", 404)
   }
 
   try {
@@ -273,7 +270,7 @@ export async function addAssignment(
     })
   } catch (err) {
     if (isPrismaError(err, "P2002")) {
-      throw new AppError(409, "ALREADY_ASSIGNED", "User is already assigned to this incident")
+      throw new AppError("ALREADY_ASSIGNED", "User is already assigned to this incident", 409)
     }
     throw err
   }
@@ -289,14 +286,14 @@ export async function removeAssignment(
     where: { id: incidentId, organizationId },
   })
   if (incident === null) {
-    throw new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found")
+    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
 
   const assignment = await db.incidentAssignee.findUnique({
     where: { incidentId_userId: { incidentId, userId } },
   })
   if (assignment === null) {
-    throw new AppError(404, "ASSIGNMENT_NOT_FOUND", "Assignment not found")
+    throw new AppError("ASSIGNMENT_NOT_FOUND", "Assignment not found", 404)
   }
 
   await db.$transaction(async (tx) => {

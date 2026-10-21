@@ -1,41 +1,41 @@
 import {
-  SignJWT,
-  jwtVerify,
-  decodeJwt,
-  importPKCS8,
-  importSPKI,
-} from "jose"
-import { randomBytes, createHash, randomUUID } from "node:crypto"
+  createHash,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto"
+import { SignJWT, importPKCS8, importSPKI, jwtVerify } from "jose"
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
+  jwtPayloadSchema,
+  type JwtPayload,
+  type UserRole,
+} from "@workspace/shared"
 import { env } from "../env.js"
-import type { JwtPayload, UserRole } from "@workspace/shared"
 
 const ALG = "RS256"
-export const ACCESS_TTL_S = 60 * 15 // 15 min
-export const REFRESH_TTL_S = 60 * 60 * 24 * 7 // 7 days
 
-// Keys imported once per process and cached
-let _privateKey: CryptoKey | undefined
-let _publicKey: CryptoKey | undefined
+// PEMs live in env with literal \n sequences.
+const normalisePem = (pem: string): string => pem.replace(/\\n/g, "\n")
 
-// PEMs stored with literal \n in env — replace before importing
-function normalisePem(pem: string): string {
-  return pem.replace(/\\n/g, "\n")
+let privateKey: Promise<CryptoKey> | undefined
+let publicKey: Promise<CryptoKey> | undefined
+
+function getPrivateKey(): Promise<CryptoKey> {
+  privateKey ??= importPKCS8(normalisePem(env.JWT_PRIVATE_KEY), ALG)
+  return privateKey
 }
 
-async function getPrivateKey(): Promise<CryptoKey> {
-  _privateKey ??= await importPKCS8(normalisePem(env.JWT_PRIVATE_KEY), ALG)
-  return _privateKey
-}
-
-async function getPublicKey(): Promise<CryptoKey> {
-  _publicKey ??= await importSPKI(normalisePem(env.JWT_PUBLIC_KEY), ALG)
-  return _publicKey
+function getPublicKey(): Promise<CryptoKey> {
+  publicKey ??= importSPKI(normalisePem(env.JWT_PUBLIC_KEY), ALG)
+  return publicKey
 }
 
 export type TokenPair = {
   accessToken: string
-  refreshToken: string // raw opaque value — set as HttpOnly cookie
-  tokenId: string // jti — used as Redis key suffix
+  // Raw opaque value. Only its hash is stored in Redis.
+  refreshToken: string
 }
 
 export async function issueTokenPair(claims: {
@@ -43,37 +43,40 @@ export async function issueTokenPair(claims: {
   organizationId: string
   role: UserRole
 }): Promise<TokenPair> {
-  const tokenId = randomUUID()
-
   const accessToken = await new SignJWT({
     organizationId: claims.organizationId,
     role: claims.role,
   })
-    .setProtectedHeader({ alg: ALG })
+    .setProtectedHeader({ alg: ALG, kid: env.JWT_KEY_ID })
     .setSubject(claims.userId)
-    .setJti(tokenId)
+    .setJti(randomUUID())
     .setIssuedAt()
-    .setExpirationTime(`${ACCESS_TTL_S}s`)
+    .setExpirationTime(`${ACCESS_TOKEN_TTL_SECONDS}s`)
     .sign(await getPrivateKey())
 
-  const refreshToken = randomBytes(32).toString("hex")
-
-  return { accessToken, refreshToken, tokenId }
+  return { accessToken, refreshToken: randomBytes(32).toString("hex") }
 }
 
-export async function verifyAccessToken(token: string): Promise<JwtPayload> {
+// Verifies the signature and parses the claims. With allowExpired the token may
+// be past exp (but never older than the refresh lifetime): /auth/refresh and
+// /auth/logout only need a trustworthy sub and jti from it.
+export async function verifyAccessToken(
+  token: string,
+  options: { allowExpired?: boolean } = {}
+): Promise<JwtPayload> {
   const { payload } = await jwtVerify(token, await getPublicKey(), {
     algorithms: [ALG],
+    clockTolerance: options.allowExpired ? REFRESH_TOKEN_TTL_SECONDS : 0,
   })
-  return payload as unknown as JwtPayload
-}
-
-// Decodes without verification — used during refresh/logout when the
-// access token may already be expired but we still need sub + jti.
-export function decodeAccessToken(token: string): Partial<JwtPayload> {
-  return decodeJwt(token) as unknown as Partial<JwtPayload>
+  return jwtPayloadSchema.parse(payload)
 }
 
 export function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex")
+}
+
+export function hashesMatch(a: string, b: string): boolean {
+  const left = Buffer.from(a, "hex")
+  const right = Buffer.from(b, "hex")
+  return left.length === right.length && timingSafeEqual(left, right)
 }

@@ -1,118 +1,77 @@
-
 import { Router, type Router as ExpressRouter } from "express"
-import type { Request, Response, NextFunction } from "express"
-import { signinSchema, signupSchema} from "@workspace/shared"
-import { AppError } from "../../lib/errors.js"
 import {
-  setTokenCookies,
-  clearTokenCookies,
   ACCESS_TOKEN_COOKIE,
+  ErrorCode,
   REFRESH_TOKEN_COOKIE,
-} from "../../lib/cookies.js"
+  loginSchema,
+  registerSchema,
+} from "@workspace/shared"
+import { clearTokenCookies, setTokenCookies } from "../../lib/cookies.js"
+import { AuthenticationError } from "../../lib/errors.js"
+import { parseInput } from "../../lib/validate.js"
 import { authenticate } from "../../middleware/authenticate.js"
+import { rateLimit } from "../../middleware/rate-limit.js"
 import * as authService from "./auth.service.js"
 
-export const authRouter : ExpressRouter = Router()
+export const authRouter: ExpressRouter = Router()
 
-function validationError(issues: { path: PropertyKey[]; message: string }[]) {
-  const details: Record<string, string> = {}
-  for (const issue of issues) {
-    const key = issue.path
-      .filter((p): p is string | number => typeof p !== "symbol")
-      .join(".") || "root"
-    details[key] = issue.message
+// 20 attempts per hour per IP on credential endpoints (security-design.md).
+const credentialLimit = rateLimit({
+  name: "auth",
+  limit: 20,
+  windowSeconds: 60 * 60,
+})
+
+authRouter.post("/register", credentialLimit, async (req, res) => {
+  const input = parseInput(registerSchema, req.body)
+  const session = await authService.register(input)
+
+  setTokenCookies(res, session.accessToken, session.refreshToken)
+  res.status(201).json({
+    success: true,
+    data: { user: session.user, organization: session.organization },
+  })
+})
+
+authRouter.post("/login", credentialLimit, async (req, res) => {
+  const input = parseInput(loginSchema, req.body)
+  const session = await authService.login(input)
+
+  setTokenCookies(res, session.accessToken, session.refreshToken)
+  res.json({
+    success: true,
+    data: { user: session.user, organization: session.organization },
+  })
+})
+
+authRouter.post("/refresh", async (req, res) => {
+  const refreshToken: unknown = req.cookies[REFRESH_TOKEN_COOKIE]
+  const accessToken: unknown = req.cookies[ACCESS_TOKEN_COOKIE]
+
+  if (typeof refreshToken !== "string" || typeof accessToken !== "string") {
+    throw new AuthenticationError(
+      "Authentication required.",
+      ErrorCode.MISSING_TOKEN
+    )
   }
-  return new AppError(400, "VALIDATION_ERROR", "Validation failed")
-}
 
-authRouter.post(
-  "/signup",
-  async (req: Request, res: Response, next: NextFunction) => {
-    const parsed = signupSchema.safeParse(req.body)
-    if (!parsed.success) {
-      next(validationError(parsed.error.issues))
-      return
-    }
+  const session = await authService.refresh(refreshToken, accessToken)
 
-    const result = await authService.register(parsed.data).catch(next)
-    if (!result) return
+  setTokenCookies(res, session.accessToken, session.refreshToken)
+  res.json({ success: true, data: {} })
+})
 
-    setTokenCookies(res, result.accessToken, result.refreshToken)
-    res.status(201).json({
-      success: true,
-      data: { user: result.user, organization: result.organization },
-    })
-  },
-)
+authRouter.post("/logout", async (req, res) => {
+  const accessToken: unknown = req.cookies[ACCESS_TOKEN_COOKIE]
+  await authService.logout(
+    typeof accessToken === "string" ? accessToken : undefined
+  )
 
-authRouter.post(
-  "/signin",
-  async (req: Request, res: Response, next: NextFunction) => {
-    
-    const parsed = signinSchema.safeParse(req.body)
-    if (!parsed.success) {
-      next(validationError(parsed.error.issues))
-      return
-    }
+  clearTokenCookies(res)
+  res.json({ success: true, data: {} })
+})
 
-    const result = await authService.login(parsed.data).catch(next)
-    if (!result) return
-
-    setTokenCookies(res, result.accessToken, result.refreshToken)
-    res.json({
-      success: true,
-      data: { user: result.user, organization: result.organization },
-    })
-  },
-)
-
-authRouter.post(
-  "/refresh",
-  async (req: Request, res: Response, next: NextFunction) => {
-    const rawRefresh: unknown = req.cookies[REFRESH_TOKEN_COOKIE]
-    const rawAccess: unknown = req.cookies[ACCESS_TOKEN_COOKIE]
-
-    if (typeof rawRefresh !== "string" || typeof rawAccess !== "string") {
-      next(new AppError(401, "MISSING_TOKEN", "Missing token cookies"))
-      return
-    }
-
-    const result = await authService.refresh(rawRefresh, rawAccess).catch(next)
-    if (!result) return
-
-    setTokenCookies(res, result.accessToken, result.refreshToken)
-    res.json({ success: true, data: {} })
-  },
-)
-
-authRouter.post(
-  "/logout",
-  async (req: Request, res: Response, next: NextFunction) => {
-    const rawAccess: unknown = req.cookies[ACCESS_TOKEN_COOKIE]
-    if (typeof rawAccess === "string") {
-      await authService.logout(rawAccess).catch(next)
-    }
-    clearTokenCookies(res)
-    res.json({ success: true, data: {} })
-  },
-)
-
-authRouter.post(
-  "/logout-all",
-  authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
-    await authService.logoutAll(req.caller.sub).catch(next)
-    clearTokenCookies(res)
-    res.json({ success: true, data: {} })
-  },
-)
-
-authRouter.get(
-  "/me",
-  authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
-    const result = await authService.getMe(req.caller.sub).catch(next)
-    if (!result) return
-    res.json({ success: true, data: result })
-  },
-)
+authRouter.get("/me", authenticate, async (req, res) => {
+  const me = await authService.getMe(req.caller.sub)
+  res.json({ success: true, data: me })
+})

@@ -1,4 +1,4 @@
-import { prisma as db } from "@workspace/db"
+import { prisma as db } from "../../lib/prisma.js"
 import { AppError } from "../../lib/errors.js"
 import type {
   CreateServiceInput,
@@ -45,7 +45,7 @@ export async function createService(
     where: { organizationId, name: input.name },
   })
   if (existing !== null) {
-    throw new AppError(409, "SERVICE_NAME_TAKEN", "A service with that name already exists")
+    throw new AppError("SERVICE_NAME_TAKEN", "A service with that name already exists", 409)
   }
 
   const service = await db.service.create({
@@ -68,7 +68,7 @@ export async function updateService(
     where: { id: serviceId, organizationId },
   })
   if (service === null) {
-    throw new AppError(404, "SERVICE_NOT_FOUND", "Service not found")
+    throw new AppError("SERVICE_NOT_FOUND", "Service not found", 404)
   }
 
   const updated = await db.service.update({
@@ -89,7 +89,7 @@ export async function deleteService(
     where: { id: serviceId, organizationId },
   })
   if (service === null) {
-    throw new AppError(404, "SERVICE_NOT_FOUND", "Service not found")
+    throw new AppError("SERVICE_NOT_FOUND", "Service not found", 404)
   }
   await db.service.delete({ where: { id: serviceId } })
 }

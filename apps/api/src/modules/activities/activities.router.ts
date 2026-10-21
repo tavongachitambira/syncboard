@@ -2,7 +2,7 @@ import { Router, type Router as ExpressRouter } from "express"
 import type { Request, Response, NextFunction } from "express"
 import { authenticate } from "../../middleware/authenticate.js"
 import { AppError } from "../../lib/errors.js"
-import { prisma as db } from "@workspace/db"
+import { prisma as db } from "../../lib/prisma.js"
 import { ActivityType, type ActivityResponse } from "@workspace/shared"
 
 export const activitiesRouter: ExpressRouter = Router({ mergeParams: true })
@@ -23,7 +23,7 @@ activitiesRouter.get(
 
     if (incident === undefined) return
     if (incident === null) {
-      next(new AppError(404, "INCIDENT_NOT_FOUND", "Incident not found"))
+      next(new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404))
       return
     }
 
