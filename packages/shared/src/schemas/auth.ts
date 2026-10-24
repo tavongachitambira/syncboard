@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { UserRole } from "../types/user.js"
+import { UserRole } from "../types/user.ts"
 
 // bcrypt only hashes the first 72 bytes, so longer passwords would silently
 // collide on their prefix.
