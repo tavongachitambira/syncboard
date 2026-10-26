@@ -5,7 +5,14 @@ import { PrismaClient } from "../generated/prisma/client.js"
 // startup and builds its own client with this factory.
 export function createPrismaClient(connectionString: string): PrismaClient {
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg({
+      connectionString,
+      // A new connection to a remote database can take several seconds (TLS and
+      // auth round trips), so allow for that and keep idle connections around
+      // instead of paying the cost again after pg's 10s default.
+      connectionTimeoutMillis: 20_000,
+      idleTimeoutMillis: 5 * 60_000,
+    }),
   })
 }
 
