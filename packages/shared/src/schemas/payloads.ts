@@ -14,13 +14,12 @@ export type JoinIncidentRoomPayload = z.infer<typeof joinIncidentRoomSchema>
 
 // ─── Yjs collaboration ────────────────────────────────────────────────────────
 
-// schemas/payloads.ts
 export const documentUpdateSchema = z.object({
   incidentId: z.uuid(),
   update: z.string().min(1),
   messageId: z.uuid(),
 })
-export type DocumentUpdateInput = z.infer<typeof documentUpdateSchema>  // ← was DocumentUpdatePayload
+export type DocumentUpdateInput = z.infer<typeof documentUpdateSchema>
 
 export const documentSyncRequestSchema = z.object({
   incidentId: z.uuid(),

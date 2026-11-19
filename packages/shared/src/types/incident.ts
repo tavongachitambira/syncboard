@@ -55,7 +55,7 @@ export type AssigneeResponse = {
 export type IncidentResponse = {
   id: string
   organizationId: string
-  serviceId: string | null
+  serviceId: string
   title: string
   severity: Severity
   status: IncidentStatus
