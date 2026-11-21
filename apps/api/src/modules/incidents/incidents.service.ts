@@ -53,7 +53,10 @@ export async function listIncidents(
     db.incident.findMany({
       where,
       include: { assignees: { include: { user: true } } },
-      orderBy: { [input.sort]: input.order },
+      // `severity` has only four distinct values, so ties are the norm; without
+      // a unique tiebreaker Postgres may order tied rows differently from one
+      // LIMIT/OFFSET page to the next, repeating or skipping incidents.
+      orderBy: [{ [input.sort]: input.order }, { id: "asc" }],
       skip: (input.page - 1) * input.limit,
       take: input.limit,
     }),
