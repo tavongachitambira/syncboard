@@ -81,12 +81,13 @@ export async function createComment(
 
 export async function updateComment(
   organizationId: string,
+  incidentId: string,
   commentId: string,
   actorId: string,
   input: UpdateCommentInput
 ): Promise<CommentResponse> {
   const comment = await db.comment.findFirst({
-    where: { id: commentId, incident: { organizationId } },
+    where: { id: commentId, incidentId, incident: { organizationId } },
     include: { author: true },
   })
   if (comment === null) {
@@ -106,12 +107,13 @@ export async function updateComment(
 
 export async function deleteComment(
   organizationId: string,
+  incidentId: string,
   commentId: string,
   actorId: string,
   actorRole: string
 ): Promise<void> {
   const comment = await db.comment.findFirst({
-    where: { id: commentId, incident: { organizationId } },
+    where: { id: commentId, incidentId, incident: { organizationId } },
   })
   if (comment === null) {
     throw new AppError("COMMENT_NOT_FOUND", "Comment not found", 404)

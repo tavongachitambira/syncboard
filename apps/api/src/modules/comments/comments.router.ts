@@ -8,18 +8,18 @@ import * as commentsService from "./comments.service.js"
 
 export const commentsRouter: ExpressRouter = Router({ mergeParams: true })
 
+const param = (req: Request, name: string): string => {
+  const value = req.params[name]
+  return typeof value === "string" ? value : ""
+}
+
 commentsRouter.use(authenticate)
 
 commentsRouter.get(
   "/",
   async (req: Request, res: Response, next: NextFunction) => {
     const result = await commentsService
-      .listComments(
-        req.caller.organizationId,
-        typeof req.params["incidentId"] === "string"
-          ? req.params["incidentId"]
-          : ""
-      )
+      .listComments(req.caller.organizationId, param(req, "incidentId"))
       .catch(next)
     if (!result) return
     res.json({ success: true, data: result })
@@ -38,9 +38,7 @@ commentsRouter.post(
     const result = await commentsService
       .createComment(
         req.caller.organizationId,
-        typeof req.params["incidentId"] === "string"
-          ? req.params["incidentId"]
-          : "",
+        param(req, "incidentId"),
         req.caller.sub,
         parsed.data
       )
@@ -62,9 +60,8 @@ commentsRouter.patch(
     const result = await commentsService
       .updateComment(
         req.caller.organizationId,
-        typeof req.params["commentId"] === "string"
-          ? req.params["commentId"]
-          : "",
+        param(req, "incidentId"),
+        param(req, "commentId"),
         req.caller.sub,
         parsed.data
       )
@@ -74,20 +71,19 @@ commentsRouter.patch(
   }
 )
 
+// Express 5 forwards a rejected promise to the error handler, so a failed
+// delete must not fall through to the 204 below (`.catch(next)` used to let it).
 commentsRouter.delete(
   "/:commentId",
   authorize("ENGINEER"),
-  async (req: Request, res: Response, next: NextFunction) => {
-    await commentsService
-      .deleteComment(
-        req.caller.organizationId,
-        typeof req.params["commentId"] === "string"
-          ? req.params["commentId"]
-          : "",
-        req.caller.sub,
-        req.caller.role
-      )
-      .catch(next)
+  async (req: Request, res: Response) => {
+    await commentsService.deleteComment(
+      req.caller.organizationId,
+      param(req, "incidentId"),
+      param(req, "commentId"),
+      req.caller.sub,
+      req.caller.role
+    )
     res.status(204).send()
   }
 )
