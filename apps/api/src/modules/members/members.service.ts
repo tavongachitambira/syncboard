@@ -1,11 +1,24 @@
 import { randomBytes } from "node:crypto"
 import { prisma as db } from "../../lib/prisma.js"
 import { AppError } from "../../lib/errors.js"
+import type { Prisma } from "@workspace/db"
 import type {
   InviteMemberInput,
   UpdateRoleInput,
   UserResponse,
 } from "@workspace/shared"
+
+// Only these columns are ever read for API responses, so password hashes never
+// leave the database layer.
+const memberSelect = {
+  id: true,
+  email: true,
+  displayName: true,
+  avatarUrl: true,
+  role: true,
+  organizationId: true,
+  createdAt: true,
+} satisfies Prisma.UserSelect
 
 function toUserResponse(user: {
   id: string
@@ -16,7 +29,15 @@ function toUserResponse(user: {
   organizationId: string
   createdAt: Date
 }): UserResponse {
-  return { ...user, createdAt: user.createdAt.toISOString() }
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    organizationId: user.organizationId,
+    createdAt: user.createdAt.toISOString(),
+  }
 }
 
 export async function listMembers(
@@ -25,6 +46,7 @@ export async function listMembers(
   return (
     await db.user.findMany({
       where: { organizationId },
+      select: memberSelect,
       orderBy: { displayName: "asc" },
     })
   ).map(toUserResponse)
@@ -49,6 +71,7 @@ export async function inviteMember(
       tokenHash: randomBytes(32).toString("hex"),
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
+    select: { id: true },
   })
 }
 
@@ -79,6 +102,7 @@ export async function updateMemberRole(
     await db.user.update({
       where: { id: memberId },
       data: { role: input.role as never },
+      select: memberSelect,
     })
   )
 }

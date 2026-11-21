@@ -11,7 +11,12 @@ function toResponse(org: {
   slug: string
   createdAt: Date
 }): OrganizationResponse {
-  return { ...org, createdAt: org.createdAt.toISOString() }
+  return {
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    createdAt: org.createdAt.toISOString(),
+  }
 }
 
 export async function getOrganization(
