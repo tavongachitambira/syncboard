@@ -97,7 +97,7 @@ export async function updateMemberRole(
   return toUserResponse(
     await db.user.update({
       where: { id: memberId },
-      data: { role: input.role as never },
+      data: { role: input.role },
       select: memberSelect,
     })
   )

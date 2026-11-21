@@ -1,6 +1,7 @@
 import { prisma as db } from "../../lib/prisma.js"
 import { AppError, BusinessError, ConflictError } from "../../lib/errors.js"
 import { ErrorCode } from "@workspace/shared"
+import { isUniqueViolation } from "../../lib/prisma-errors.js"
 import type {
   CreateIncidentInput,
   UpdateIncidentInput,
@@ -21,8 +22,8 @@ function toIncidentResponse(i: IncidentWithAssignees): IncidentResponse {
     organizationId: i.organizationId,
     serviceId: i.serviceId,
     title: i.title,
-    severity: i.severity as IncidentResponse["severity"],
-    status: i.status as IncidentResponse["status"],
+    severity: i.severity,
+    status: i.status,
     version: i.version,
     assignees: i.assignees.map((a) => ({
       id: a.user.id,
@@ -40,8 +41,8 @@ export async function listIncidents(
   input: ListIncidentsInput
 ): Promise<{ data: IncidentResponse[]; pagination: PaginationMeta }> {
   const where: Prisma.IncidentWhereInput = { organizationId }
-  if (input.status !== undefined) where.status = input.status as never
-  if (input.severity !== undefined) where.severity = input.severity as never
+  if (input.status !== undefined) where.status = input.status
+  if (input.severity !== undefined) where.severity = input.severity
   if (input.serviceId !== undefined) where.serviceId = input.serviceId
   if (input.assignee !== undefined)
     where.assignees = { some: { userId: input.assignee } }
@@ -121,7 +122,7 @@ export async function createIncident(
         organizationId,
         serviceId: input.serviceId,
         title: input.title,
-        severity: input.severity as never,
+        severity: input.severity,
         assignees: {
           create: input.assignees.map((userId) => ({ userId })),
         },
@@ -202,7 +203,7 @@ export async function updateIncident(
 
   const { version: _version, ...fields } = input
 
-  const activities: { type: ActivityType; payload: Record<string, unknown> }[] =
+  const activities: { type: ActivityType; payload: Prisma.InputJsonObject }[] =
     []
 
   if (fields.title !== undefined && fields.title !== incident.title) {
@@ -258,7 +259,7 @@ export async function updateIncident(
           incidentId,
           actorId,
           type: a.type,
-          payload: a.payload as Prisma.InputJsonValue,
+          payload: a.payload,
         })),
       })
     }
@@ -355,7 +356,7 @@ export async function addAssignment(
       })
     })
   } catch (err) {
-    if (isPrismaError(err, "P2002")) {
+    if (isUniqueViolation(err)) {
       throw new AppError(
         "ALREADY_ASSIGNED",
         "User is already assigned to this incident",
@@ -403,15 +404,4 @@ export async function removeAssignment(
       },
     })
   })
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isPrismaError(err: unknown, code: string): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as Record<string, unknown>)["code"] === code
-  )
 }

@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express"
 import { authenticate } from "../../middleware/authenticate.js"
 import { AppError } from "../../lib/errors.js"
 import { prisma as db } from "../../lib/prisma.js"
-import { ActivityType, type ActivityResponse } from "@workspace/shared"
+import type { ActivityResponse } from "@workspace/shared"
 
 export const activitiesRouter: ExpressRouter = Router({ mergeParams: true })
 
@@ -45,7 +45,8 @@ activitiesRouter.get(
         displayName: a.actor.displayName,
         avatarUrl: a.actor.avatarUrl,
       },
-      type: a.type as ActivityResponse["type"],
+      type: a.type,
+      // payload is stored as JSON; activity writers only ever store objects.
       payload: a.payload as Record<string, unknown>,
       createdAt: a.createdAt.toISOString(),
     }))
