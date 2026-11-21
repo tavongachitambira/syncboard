@@ -4,12 +4,14 @@ import { logger } from "./lib/logger.js"
 import { getDummyHash } from "./lib/password.js"
 import { prisma } from "./lib/prisma.js"
 import { redis } from "./lib/redis.js"
+import { verifyKeyPair } from "./lib/tokens.js"
 
 async function start(): Promise<void> {
   await prisma.$queryRaw`SELECT 1`
   await redis.connect()
   // Build the login timing-equalisation hash now, not on the first request.
   await getDummyHash()
+  await verifyKeyPair()
 
   const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT, env: env.NODE_ENV }, "api listening")
