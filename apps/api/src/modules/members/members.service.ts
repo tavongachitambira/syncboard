@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { prisma as db } from "../../lib/prisma.js"
-import { AppError } from "../../lib/errors.js"
+import { AppError, ConflictError } from "../../lib/errors.js"
+import { isForeignKeyViolation } from "../../lib/prisma-errors.js"
 import type { Prisma } from "@workspace/db"
 import type {
   InviteMemberInput,
@@ -124,5 +125,16 @@ export async function removeMember(
       "The organization owner cannot be removed",
       403
     )
-  await db.user.delete({ where: { id: memberId } })
+  try {
+    await db.user.delete({ where: { id: memberId } })
+  } catch (error) {
+    // Services, comments, activities and operations reference their author with
+    // NoAction, so a member with history on record cannot be deleted.
+    if (isForeignKeyViolation(error)) {
+      throw new ConflictError(
+        "This member still owns services or has activity on record and cannot be removed."
+      )
+    }
+    throw error
+  }
 }
