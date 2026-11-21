@@ -54,20 +54,15 @@ export async function listMembers(
 
 export async function inviteMember(
   organizationId: string,
+  invitedById: string,
   input: InviteMemberInput
 ): Promise<{ id: string }> {
-  const inviter = await db.user.findFirst({
-    where: { organizationId },
-    orderBy: { createdAt: "asc" },
-  })
-  if (inviter === null)
-    throw new AppError("ORGANIZATION_NOT_FOUND", "Organization not found", 404)
   return db.invitation.create({
     data: {
       organizationId,
       email: input.email,
-      role: input.role as never,
-      invitedById: inviter.id,
+      role: input.role,
+      invitedById,
       tokenHash: randomBytes(32).toString("hex"),
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },

@@ -33,7 +33,7 @@ membersRouter.post(
       return
     }
     const result = await membersService
-      .inviteMember(req.caller.organizationId, parsed.data)
+      .inviteMember(req.caller.organizationId, req.caller.sub, parsed.data)
       .catch(next)
     if (!result) return
     res.status(201).json({ success: true, data: result })
