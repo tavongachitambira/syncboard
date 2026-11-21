@@ -1,5 +1,5 @@
 import { prisma as db } from "../../lib/prisma.js"
-import { AppError, BusinessError } from "../../lib/errors.js"
+import { AppError, BusinessError, ConflictError } from "../../lib/errors.js"
 import { ErrorCode } from "@workspace/shared"
 import type {
   CreateIncidentInput,
@@ -145,6 +145,33 @@ export async function createIncident(
   return toIncidentResponse(incident)
 }
 
+const VERSION_CONFLICT_MESSAGE =
+  "Incident was modified by another user. Please refresh and try again."
+
+// A conditional write matched nothing. Look at the row again (inside the same
+// transaction) to report why: it is gone, already resolved, or changed under us.
+async function explainFailedWrite(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  incidentId: string,
+  resolvedMessage: string
+): Promise<AppError> {
+  const current = await tx.incident.findFirst({
+    where: { id: incidentId, organizationId },
+    select: { status: true },
+  })
+  if (current === null) {
+    return new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
+  }
+  if (current.status === "RESOLVED") {
+    return new BusinessError(
+      ErrorCode.INCIDENT_ALREADY_RESOLVED,
+      resolvedMessage
+    )
+  }
+  return new ConflictError(VERSION_CONFLICT_MESSAGE)
+}
+
 export async function updateIncident(
   organizationId: string,
   incidentId: string,
@@ -157,20 +184,17 @@ export async function updateIncident(
   if (incident === null) {
     throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
+  const resolvedMessage = "A resolved incident cannot be modified."
   if (incident.status === "RESOLVED") {
     throw new BusinessError(
       ErrorCode.INCIDENT_ALREADY_RESOLVED,
-      "A resolved incident cannot be modified."
+      resolvedMessage
     )
   }
 
-  // Optimistic concurrency check
+  // Optimistic concurrency check: fail fast when the client's copy is stale.
   if (input.version !== undefined && incident.version !== input.version) {
-    throw new AppError(
-      "VERSION_CONFLICT",
-      "Incident was modified by another user. Please refresh and try again.",
-      409
-    )
+    throw new ConflictError(VERSION_CONFLICT_MESSAGE)
   }
 
   const { version: _version, ...fields } = input
@@ -198,16 +222,32 @@ export async function updateIncident(
   }
 
   const updated = await db.$transaction(async (tx) => {
-    const u = await tx.incident.update({
-      where: { id: incidentId },
+    // The check above is only an early exit. Two requests holding the same
+    // version can both pass it, so the write itself must be the compare-and-set:
+    // matching on `version` (and "not resolved") means the second UPDATE finds
+    // nothing once the first has committed, instead of overwriting it.
+    const { count } = await tx.incident.updateMany({
+      where: {
+        id: incidentId,
+        organizationId,
+        version: incident.version,
+        status: { not: "RESOLVED" },
+      },
       data: {
         ...(fields.title !== undefined && { title: fields.title }),
         ...(fields.severity !== undefined && { severity: fields.severity }),
         ...(fields.status !== undefined && { status: fields.status }),
         version: { increment: 1 },
       },
-      include: { assignees: { include: { user: true } } },
     })
+    if (count === 0) {
+      throw await explainFailedWrite(
+        tx,
+        organizationId,
+        incidentId,
+        resolvedMessage
+      )
+    }
 
     if (activities.length > 0) {
       await tx.activity.createMany({
@@ -220,7 +260,10 @@ export async function updateIncident(
       })
     }
 
-    return u
+    return tx.incident.findUniqueOrThrow({
+      where: { id: incidentId },
+      include: { assignees: { include: { user: true } } },
+    })
   })
 
   return toIncidentResponse(updated)
@@ -231,28 +274,29 @@ export async function resolveIncident(
   incidentId: string,
   actorId: string
 ): Promise<IncidentResponse> {
-  const incident = await db.incident.findFirst({
-    where: { id: incidentId, organizationId },
-    include: { assignees: { include: { user: true } } },
-  })
-  if (incident === null) {
-    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
-  }
-  if (incident.status === "RESOLVED") {
-    throw new BusinessError(
-      ErrorCode.INCIDENT_ALREADY_RESOLVED,
-      "Incident is already resolved."
-    )
-  }
-
   const resolved = await db.$transaction(async (tx) => {
-    const u = await tx.incident.update({
-      where: { id: incidentId },
+    // Resolve with a conditional write so that two concurrent requests cannot
+    // both succeed (which recorded two RESOLVED activities and overwrote
+    // resolvedAt); the loser matches no row and is reported as already resolved.
+    const { count } = await tx.incident.updateMany({
+      where: { id: incidentId, organizationId, status: { not: "RESOLVED" } },
       data: {
         status: "RESOLVED",
         resolvedAt: new Date(),
         version: { increment: 1 },
       },
+    })
+    if (count === 0) {
+      throw await explainFailedWrite(
+        tx,
+        organizationId,
+        incidentId,
+        "Incident is already resolved."
+      )
+    }
+
+    const u = await tx.incident.findUniqueOrThrow({
+      where: { id: incidentId },
       include: { assignees: { include: { user: true } } },
     })
 
