@@ -1,5 +1,6 @@
 import { prisma as db } from "../../lib/prisma.js"
-import { AppError } from "../../lib/errors.js"
+import { AppError, BusinessError } from "../../lib/errors.js"
+import { ErrorCode } from "@workspace/shared"
 import type {
   CreateIncidentInput,
   UpdateIncidentInput,
@@ -156,6 +157,12 @@ export async function updateIncident(
   if (incident === null) {
     throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
+  if (incident.status === "RESOLVED") {
+    throw new BusinessError(
+      ErrorCode.INCIDENT_ALREADY_RESOLVED,
+      "A resolved incident cannot be modified."
+    )
+  }
 
   // Optimistic concurrency check
   if (input.version !== undefined && incident.version !== input.version) {
@@ -183,15 +190,20 @@ export async function updateIncident(
       payload: { from: incident.severity, to: fields.severity },
     })
   }
+  if (fields.status !== undefined && fields.status !== incident.status) {
+    activities.push({
+      type: "STATUS_CHANGED",
+      payload: { from: incident.status, to: fields.status },
+    })
+  }
 
   const updated = await db.$transaction(async (tx) => {
     const u = await tx.incident.update({
       where: { id: incidentId },
       data: {
         ...(fields.title !== undefined && { title: fields.title }),
-        ...(fields.severity !== undefined && {
-          severity: fields.severity as never,
-        }),
+        ...(fields.severity !== undefined && { severity: fields.severity }),
+        ...(fields.status !== undefined && { status: fields.status }),
         version: { increment: 1 },
       },
       include: { assignees: { include: { user: true } } },
@@ -227,10 +239,9 @@ export async function resolveIncident(
     throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
   if (incident.status === "RESOLVED") {
-    throw new AppError(
-      "INCIDENT_ALREADY_RESOLVED",
-      "Incident is already resolved",
-      409
+    throw new BusinessError(
+      ErrorCode.INCIDENT_ALREADY_RESOLVED,
+      "Incident is already resolved."
     )
   }
 

@@ -49,6 +49,14 @@ export class NotFoundError extends AppError {
   }
 }
 
+// 422: the request is well formed but breaks a domain rule, e.g. modifying an
+// incident that is already resolved.
+export class BusinessError extends AppError {
+  constructor(code: ErrorCode, message: string) {
+    super(code, message, 422)
+  }
+}
+
 export class ConflictError extends AppError {
   constructor(message: string, code: ErrorCode = ErrorCode.CONFLICT) {
     super(code, message, 409)
