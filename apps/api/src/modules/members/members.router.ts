@@ -65,10 +65,14 @@ membersRouter.patch(
 membersRouter.delete(
   "/:memberId",
   authorize("ADMIN"),
-  async (req: Request, res: Response, next: NextFunction) => {
-    await membersService
-      .removeMember(req.caller.organizationId, memberId(req), req.caller.sub)
-      .catch(next)
+  async (req: Request, res: Response) => {
+    // No `.catch(next)`: Express 5 forwards the rejection, and swallowing it
+    // here used to let a failed removal still answer 204.
+    await membersService.removeMember(
+      req.caller.organizationId,
+      memberId(req),
+      req.caller.sub
+    )
     res.status(204).send()
   }
 )
