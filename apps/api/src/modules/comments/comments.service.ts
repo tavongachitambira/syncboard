@@ -1,6 +1,10 @@
 import { prisma as db } from "../../lib/prisma.js"
 import { AppError } from "../../lib/errors.js"
-import type { CreateCommentInput, UpdateCommentInput, CommentResponse } from "@workspace/shared"
+import type {
+  CreateCommentInput,
+  UpdateCommentInput,
+  CommentResponse,
+} from "@workspace/shared"
 
 function toCommentResponse(c: {
   id: string
@@ -25,7 +29,7 @@ function toCommentResponse(c: {
 
 export async function listComments(
   organizationId: string,
-  incidentId: string,
+  incidentId: string
 ): Promise<CommentResponse[]> {
   // Verify incident belongs to this org
   const incident = await db.incident.findFirst({
@@ -47,7 +51,7 @@ export async function createComment(
   organizationId: string,
   incidentId: string,
   authorId: string,
-  input: CreateCommentInput,
+  input: CreateCommentInput
 ): Promise<CommentResponse> {
   const incident = await db.incident.findFirst({
     where: { id: incidentId, organizationId },
@@ -79,7 +83,7 @@ export async function updateComment(
   organizationId: string,
   commentId: string,
   actorId: string,
-  input: UpdateCommentInput,
+  input: UpdateCommentInput
 ): Promise<CommentResponse> {
   const comment = await db.comment.findFirst({
     where: { id: commentId, incident: { organizationId } },
@@ -104,7 +108,7 @@ export async function deleteComment(
   organizationId: string,
   commentId: string,
   actorId: string,
-  actorRole: string,
+  actorRole: string
 ): Promise<void> {
   const comment = await db.comment.findFirst({
     where: { id: commentId, incident: { organizationId } },
@@ -117,7 +121,11 @@ export async function deleteComment(
   const isAdmin = actorRole === "ADMIN" || actorRole === "OWNER"
 
   if (!isOwner && !isAdmin) {
-    throw new AppError("FORBIDDEN", "You can only delete your own comments", 403)
+    throw new AppError(
+      "FORBIDDEN",
+      "You can only delete your own comments",
+      403
+    )
   }
 
   await db.comment.delete({ where: { id: commentId } })

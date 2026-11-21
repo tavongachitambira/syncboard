@@ -9,12 +9,39 @@ import * as organizationService from "./organization.service.js"
 export const organizationsRouter: ExpressRouter = Router()
 organizationsRouter.use(authenticate)
 
-organizationsRouter.get("/current", async (req: Request, res: Response, next: NextFunction) => {
-  try { res.json({ success: true, data: await organizationService.getOrganization(req.caller.organizationId) }) } catch (error) { next(error) }
-})
+organizationsRouter.get(
+  "/current",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({
+        success: true,
+        data: await organizationService.getOrganization(
+          req.caller.organizationId
+        ),
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+)
 
-organizationsRouter.patch("/current", authorize("ADMIN"), async (req: Request, res: Response, next: NextFunction) => {
-  const parsed = updateOrganizationSchema.safeParse(req.body)
-  if (!parsed.success) return next(new AppError("VALIDATION_ERROR", "Validation failed", 400))
-  try { res.json({ success: true, data: await organizationService.updateOrganization(req.caller.organizationId, parsed.data) }) } catch (error) { next(error) }
-})
+organizationsRouter.patch(
+  "/current",
+  authorize("ADMIN"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const parsed = updateOrganizationSchema.safeParse(req.body)
+    if (!parsed.success)
+      return next(new AppError("VALIDATION_ERROR", "Validation failed", 400))
+    try {
+      res.json({
+        success: true,
+        data: await organizationService.updateOrganization(
+          req.caller.organizationId,
+          parsed.data
+        ),
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+)

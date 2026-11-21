@@ -36,14 +36,16 @@ function toIncidentResponse(i: IncidentWithAssignees): IncidentResponse {
 
 export async function listIncidents(
   organizationId: string,
-  input: ListIncidentsInput,
+  input: ListIncidentsInput
 ): Promise<{ data: IncidentResponse[]; pagination: PaginationMeta }> {
   const where: Prisma.IncidentWhereInput = { organizationId }
   if (input.status !== undefined) where.status = input.status as never
   if (input.severity !== undefined) where.severity = input.severity as never
   if (input.serviceId !== undefined) where.serviceId = input.serviceId
-  if (input.assignee !== undefined) where.assignees = { some: { userId: input.assignee } }
-  if (input.q !== undefined) where.title = { contains: input.q, mode: "insensitive" }
+  if (input.assignee !== undefined)
+    where.assignees = { some: { userId: input.assignee } }
+  if (input.q !== undefined)
+    where.title = { contains: input.q, mode: "insensitive" }
 
   const [total, incidents] = await Promise.all([
     db.incident.count({ where }),
@@ -69,7 +71,7 @@ export async function listIncidents(
 
 export async function getIncident(
   organizationId: string,
-  incidentId: string,
+  incidentId: string
 ): Promise<IncidentResponse> {
   const incident = await db.incident.findFirst({
     where: { id: incidentId, organizationId },
@@ -84,7 +86,7 @@ export async function getIncident(
 export async function createIncident(
   organizationId: string,
   creatorId: string,
-  input: CreateIncidentInput,
+  input: CreateIncidentInput
 ): Promise<IncidentResponse> {
   // Verify service belongs to this org
   const service = await db.service.findFirst({
@@ -101,7 +103,11 @@ export async function createIncident(
       select: { id: true },
     })
     if (members.length !== input.assignees.length) {
-      throw new AppError("INVALID_ASSIGNEE", "One or more assignees are not members of this organization", 400)
+      throw new AppError(
+        "INVALID_ASSIGNEE",
+        "One or more assignees are not members of this organization",
+        400
+      )
     }
   }
 
@@ -142,7 +148,7 @@ export async function updateIncident(
   organizationId: string,
   incidentId: string,
   actorId: string,
-  input: UpdateIncidentInput,
+  input: UpdateIncidentInput
 ): Promise<IncidentResponse> {
   const incident = await db.incident.findFirst({
     where: { id: incidentId, organizationId },
@@ -153,12 +159,17 @@ export async function updateIncident(
 
   // Optimistic concurrency check
   if (input.version !== undefined && incident.version !== input.version) {
-    throw new AppError("VERSION_CONFLICT", "Incident was modified by another user. Please refresh and try again.", 409)
+    throw new AppError(
+      "VERSION_CONFLICT",
+      "Incident was modified by another user. Please refresh and try again.",
+      409
+    )
   }
 
   const { version: _version, ...fields } = input
 
-  const activities: { type: ActivityType; payload: Record<string, unknown> }[] = []
+  const activities: { type: ActivityType; payload: Record<string, unknown> }[] =
+    []
 
   if (fields.title !== undefined && fields.title !== incident.title) {
     activities.push({
@@ -176,7 +187,13 @@ export async function updateIncident(
   const updated = await db.$transaction(async (tx) => {
     const u = await tx.incident.update({
       where: { id: incidentId },
-      data: { ...(fields.title !== undefined && { title: fields.title }), ...(fields.severity !== undefined && { severity: fields.severity as never }), version: { increment: 1 } },
+      data: {
+        ...(fields.title !== undefined && { title: fields.title }),
+        ...(fields.severity !== undefined && {
+          severity: fields.severity as never,
+        }),
+        version: { increment: 1 },
+      },
       include: { assignees: { include: { user: true } } },
     })
 
@@ -200,14 +217,21 @@ export async function updateIncident(
 export async function resolveIncident(
   organizationId: string,
   incidentId: string,
-  actorId: string,
+  actorId: string
 ): Promise<IncidentResponse> {
-  const incident = await db.incident.findFirst({ where: { id: incidentId, organizationId }, include: { assignees: { include: { user: true } } } })
+  const incident = await db.incident.findFirst({
+    where: { id: incidentId, organizationId },
+    include: { assignees: { include: { user: true } } },
+  })
   if (incident === null) {
     throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
   if (incident.status === "RESOLVED") {
-    throw new AppError("INCIDENT_ALREADY_RESOLVED", "Incident is already resolved", 409)
+    throw new AppError(
+      "INCIDENT_ALREADY_RESOLVED",
+      "Incident is already resolved",
+      409
+    )
   }
 
   const resolved = await db.$transaction(async (tx) => {
@@ -242,7 +266,7 @@ export async function addAssignment(
   organizationId: string,
   incidentId: string,
   actorId: string,
-  userId: string,
+  userId: string
 ): Promise<void> {
   const [incident, member] = await Promise.all([
     db.incident.findFirst({ where: { id: incidentId, organizationId } }),
@@ -253,7 +277,11 @@ export async function addAssignment(
     throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
   if (member === null) {
-    throw new AppError("MEMBER_NOT_FOUND", "Member not found in this organization", 404)
+    throw new AppError(
+      "MEMBER_NOT_FOUND",
+      "Member not found in this organization",
+      404
+    )
   }
 
   try {
@@ -270,7 +298,11 @@ export async function addAssignment(
     })
   } catch (err) {
     if (isPrismaError(err, "P2002")) {
-      throw new AppError("ALREADY_ASSIGNED", "User is already assigned to this incident", 409)
+      throw new AppError(
+        "ALREADY_ASSIGNED",
+        "User is already assigned to this incident",
+        409
+      )
     }
     throw err
   }
@@ -280,7 +312,7 @@ export async function removeAssignment(
   organizationId: string,
   incidentId: string,
   actorId: string,
-  userId: string,
+  userId: string
 ): Promise<void> {
   const incident = await db.incident.findFirst({
     where: { id: incidentId, organizationId },

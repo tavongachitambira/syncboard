@@ -15,12 +15,14 @@ commentsRouter.get(
     const result = await commentsService
       .listComments(
         req.caller.organizationId,
-        typeof req.params["incidentId"] === "string" ? req.params["incidentId"] : "",
+        typeof req.params["incidentId"] === "string"
+          ? req.params["incidentId"]
+          : ""
       )
       .catch(next)
     if (!result) return
     res.json({ success: true, data: result })
-  },
+  }
 )
 
 commentsRouter.post(
@@ -34,14 +36,16 @@ commentsRouter.post(
     const result = await commentsService
       .createComment(
         req.caller.organizationId,
-        typeof req.params["incidentId"] === "string" ? req.params["incidentId"] : "",
+        typeof req.params["incidentId"] === "string"
+          ? req.params["incidentId"]
+          : "",
         req.caller.sub,
-        parsed.data,
+        parsed.data
       )
       .catch(next)
     if (!result) return
     res.status(201).json({ success: true, data: result })
-  },
+  }
 )
 
 commentsRouter.patch(
@@ -55,14 +59,16 @@ commentsRouter.patch(
     const result = await commentsService
       .updateComment(
         req.caller.organizationId,
-        typeof req.params["commentId"] === "string" ? req.params["commentId"] : "",
+        typeof req.params["commentId"] === "string"
+          ? req.params["commentId"]
+          : "",
         req.caller.sub,
-        parsed.data,
+        parsed.data
       )
       .catch(next)
     if (!result) return
     res.json({ success: true, data: result })
-  },
+  }
 )
 
 commentsRouter.delete(
@@ -71,11 +77,13 @@ commentsRouter.delete(
     await commentsService
       .deleteComment(
         req.caller.organizationId,
-        typeof req.params["commentId"] === "string" ? req.params["commentId"] : "",
+        typeof req.params["commentId"] === "string"
+          ? req.params["commentId"]
+          : "",
         req.caller.sub,
-        req.caller.role,
+        req.caller.role
       )
       .catch(next)
     res.status(204).send()
-  },
+  }
 )

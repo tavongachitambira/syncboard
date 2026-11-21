@@ -7,7 +7,8 @@ import { AppError } from "../../lib/errors.js"
 import * as membersService from "./members.service.js"
 
 export const membersRouter: ExpressRouter = Router()
-const memberId = (req: Request) => typeof req.params["memberId"] === "string" ? req.params["memberId"] : ""
+const memberId = (req: Request) =>
+  typeof req.params["memberId"] === "string" ? req.params["memberId"] : ""
 
 membersRouter.use(authenticate)
 
@@ -19,7 +20,7 @@ membersRouter.get(
       .catch(next)
     if (!result) return
     res.json({ success: true, data: result })
-  },
+  }
 )
 
 membersRouter.post(
@@ -36,7 +37,7 @@ membersRouter.post(
       .catch(next)
     if (!result) return
     res.status(201).json({ success: true, data: result })
-  },
+  }
 )
 
 membersRouter.patch(
@@ -53,26 +54,21 @@ membersRouter.patch(
         req.caller.organizationId,
         memberId(req),
         req.caller.sub,
-        parsed.data,
+        parsed.data
       )
       .catch(next)
     if (!result) return
     res.json({ success: true, data: result })
-  },
+  }
 )
-
 
 membersRouter.delete(
   "/:memberId",
   authorize("ADMIN"),
   async (req: Request, res: Response, next: NextFunction) => {
     await membersService
-      .removeMember(
-        req.caller.organizationId,
-        memberId(req),
-        req.caller.sub,
-      )
+      .removeMember(req.caller.organizationId, memberId(req), req.caller.sub)
       .catch(next)
     res.status(204).send()
-  },
+  }
 )

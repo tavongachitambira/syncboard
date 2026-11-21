@@ -51,5 +51,5 @@ activitiesRouter.get(
     }))
 
     res.json({ success: true, data })
-  },
+  }
 )

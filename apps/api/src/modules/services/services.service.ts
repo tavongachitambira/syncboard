@@ -27,7 +27,7 @@ function toServiceResponse(s: {
 }
 
 export async function listServices(
-  organizationId: string,
+  organizationId: string
 ): Promise<ServiceResponse[]> {
   const services = await db.service.findMany({
     where: { organizationId },
@@ -39,13 +39,17 @@ export async function listServices(
 export async function createService(
   organizationId: string,
   ownerId: string,
-  input: CreateServiceInput,
+  input: CreateServiceInput
 ): Promise<ServiceResponse> {
   const existing = await db.service.findFirst({
     where: { organizationId, name: input.name },
   })
   if (existing !== null) {
-    throw new AppError("SERVICE_NAME_TAKEN", "A service with that name already exists", 409)
+    throw new AppError(
+      "SERVICE_NAME_TAKEN",
+      "A service with that name already exists",
+      409
+    )
   }
 
   const service = await db.service.create({
@@ -62,7 +66,7 @@ export async function createService(
 export async function updateService(
   organizationId: string,
   serviceId: string,
-  input: UpdateServiceInput,
+  input: UpdateServiceInput
 ): Promise<ServiceResponse> {
   const service = await db.service.findFirst({
     where: { id: serviceId, organizationId },
@@ -75,7 +79,9 @@ export async function updateService(
     where: { id: serviceId },
     data: {
       ...(input.name !== undefined && { name: input.name }),
-      ...(input.description !== undefined && { description: input.description }),
+      ...(input.description !== undefined && {
+        description: input.description,
+      }),
     },
   })
   return toServiceResponse(updated)
@@ -83,7 +89,7 @@ export async function updateService(
 
 export async function deleteService(
   organizationId: string,
-  serviceId: string,
+  serviceId: string
 ): Promise<void> {
   const service = await db.service.findFirst({
     where: { id: serviceId, organizationId },
