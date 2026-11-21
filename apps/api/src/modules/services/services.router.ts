@@ -25,22 +25,20 @@ servicesRouter.get(
 )
 servicesRouter.post(
   "/",
-  authorize("ENGINEER"),
+  authorize("ADMIN"),
   async (req: Request, res: Response, next: NextFunction) => {
     const parsed = createServiceSchema.safeParse(req.body)
     if (!parsed.success)
       return next(new AppError("VALIDATION_ERROR", "Validation failed", 400))
     try {
-      res
-        .status(201)
-        .json({
-          success: true,
-          data: await service.createService(
-            req.caller.organizationId,
-            req.caller.sub,
-            parsed.data
-          ),
-        })
+      res.status(201).json({
+        success: true,
+        data: await service.createService(
+          req.caller.organizationId,
+          req.caller.sub,
+          parsed.data
+        ),
+      })
     } catch (error) {
       next(error)
     }
@@ -48,7 +46,7 @@ servicesRouter.post(
 )
 servicesRouter.patch(
   "/:serviceId",
-  authorize("ENGINEER"),
+  authorize("ADMIN"),
   async (req: Request, res: Response, next: NextFunction) => {
     const parsed = updateServiceSchema.safeParse(req.body)
     if (!parsed.success)

@@ -2,6 +2,7 @@ import { Router, type Router as ExpressRouter } from "express"
 import type { Request, Response, NextFunction } from "express"
 import { createCommentSchema, updateCommentSchema } from "@workspace/shared"
 import { authenticate } from "../../middleware/authenticate.js"
+import { authorize } from "../../middleware/authorize.js"
 import { AppError } from "../../lib/errors.js"
 import * as commentsService from "./comments.service.js"
 
@@ -27,6 +28,7 @@ commentsRouter.get(
 
 commentsRouter.post(
   "/",
+  authorize("ENGINEER"),
   async (req: Request, res: Response, next: NextFunction) => {
     const parsed = createCommentSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -50,6 +52,7 @@ commentsRouter.post(
 
 commentsRouter.patch(
   "/:commentId",
+  authorize("ENGINEER"),
   async (req: Request, res: Response, next: NextFunction) => {
     const parsed = updateCommentSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -73,6 +76,7 @@ commentsRouter.patch(
 
 commentsRouter.delete(
   "/:commentId",
+  authorize("ENGINEER"),
   async (req: Request, res: Response, next: NextFunction) => {
     await commentsService
       .deleteComment(
