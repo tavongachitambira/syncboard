@@ -52,6 +52,9 @@ async function call<T>(path: string, options: RequestOptions): Promise<T> {
     ...(options.body !== undefined && { body: JSON.stringify(options.body) }),
   })
 
+  // DELETE endpoints answer 204 with no body; those callers declare T as void.
+  if (response.status === 204) return undefined as T
+
   const parsed = envelope.safeParse(await response.json().catch(() => null))
   if (!parsed.success) {
     throw new ApiError(

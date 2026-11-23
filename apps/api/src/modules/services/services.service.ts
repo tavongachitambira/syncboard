@@ -1,5 +1,9 @@
 import { prisma as db } from "../../lib/prisma.js"
-import { AppError } from "../../lib/errors.js"
+import { AppError, ConflictError } from "../../lib/errors.js"
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from "../../lib/prisma-errors.js"
 import type {
   CreateServiceInput,
   UpdateServiceInput,
@@ -27,7 +31,7 @@ function toServiceResponse(s: {
 }
 
 export async function listServices(
-  organizationId: string,
+  organizationId: string
 ): Promise<ServiceResponse[]> {
   const services = await db.service.findMany({
     where: { organizationId },
@@ -36,33 +40,45 @@ export async function listServices(
   return services.map(toServiceResponse)
 }
 
+const nameTaken = () =>
+  new AppError(
+    "SERVICE_NAME_TAKEN",
+    "A service with that name already exists",
+    409
+  )
+
 export async function createService(
   organizationId: string,
   ownerId: string,
-  input: CreateServiceInput,
+  input: CreateServiceInput
 ): Promise<ServiceResponse> {
   const existing = await db.service.findFirst({
     where: { organizationId, name: input.name },
   })
-  if (existing !== null) {
-    throw new AppError("SERVICE_NAME_TAKEN", "A service with that name already exists", 409)
-  }
+  if (existing !== null) throw nameTaken()
 
-  const service = await db.service.create({
-    data: {
-      organizationId,
-      ownerId,
-      name: input.name,
-      description: input.description ?? null,
-    },
-  })
-  return toServiceResponse(service)
+  try {
+    const service = await db.service.create({
+      data: {
+        organizationId,
+        ownerId,
+        name: input.name,
+        description: input.description ?? null,
+      },
+    })
+    return toServiceResponse(service)
+  } catch (error) {
+    // Two requests can pass the check above at the same time; the unique
+    // (organizationId, name) index is what actually decides.
+    if (isUniqueViolation(error)) throw nameTaken()
+    throw error
+  }
 }
 
 export async function updateService(
   organizationId: string,
   serviceId: string,
-  input: UpdateServiceInput,
+  input: UpdateServiceInput
 ): Promise<ServiceResponse> {
   const service = await db.service.findFirst({
     where: { id: serviceId, organizationId },
@@ -71,19 +87,28 @@ export async function updateService(
     throw new AppError("SERVICE_NOT_FOUND", "Service not found", 404)
   }
 
-  const updated = await db.service.update({
-    where: { id: serviceId },
-    data: {
-      ...(input.name !== undefined && { name: input.name }),
-      ...(input.description !== undefined && { description: input.description }),
-    },
-  })
-  return toServiceResponse(updated)
+  try {
+    const updated = await db.service.update({
+      where: { id: serviceId },
+      data: {
+        ...(input.name !== undefined && { name: input.name }),
+        ...(input.description !== undefined && {
+          description: input.description,
+        }),
+      },
+    })
+    return toServiceResponse(updated)
+  } catch (error) {
+    // Renaming onto an existing name hits the unique (organizationId, name)
+    // index; that used to surface as a 500.
+    if (isUniqueViolation(error)) throw nameTaken()
+    throw error
+  }
 }
 
 export async function deleteService(
   organizationId: string,
-  serviceId: string,
+  serviceId: string
 ): Promise<void> {
   const service = await db.service.findFirst({
     where: { id: serviceId, organizationId },
@@ -91,5 +116,16 @@ export async function deleteService(
   if (service === null) {
     throw new AppError("SERVICE_NOT_FOUND", "Service not found", 404)
   }
-  await db.service.delete({ where: { id: serviceId } })
+  try {
+    await db.service.delete({ where: { id: serviceId } })
+  } catch (error) {
+    // Incident.serviceId is NoAction, so a service that still has incidents
+    // cannot be deleted (database-design.md: Service -> Incidents is Restrict).
+    if (isForeignKeyViolation(error)) {
+      throw new ConflictError(
+        "This service still has incidents and cannot be deleted."
+      )
+    }
+    throw error
+  }
 }

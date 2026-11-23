@@ -1,5 +1,7 @@
 import { prisma as db } from "../../lib/prisma.js"
-import { AppError } from "../../lib/errors.js"
+import { AppError, BusinessError, ConflictError } from "../../lib/errors.js"
+import { ErrorCode } from "@workspace/shared"
+import { isUniqueViolation } from "../../lib/prisma-errors.js"
 import type {
   CreateIncidentInput,
   UpdateIncidentInput,
@@ -20,8 +22,8 @@ function toIncidentResponse(i: IncidentWithAssignees): IncidentResponse {
     organizationId: i.organizationId,
     serviceId: i.serviceId,
     title: i.title,
-    severity: i.severity as IncidentResponse["severity"],
-    status: i.status as IncidentResponse["status"],
+    severity: i.severity,
+    status: i.status,
     version: i.version,
     assignees: i.assignees.map((a) => ({
       id: a.user.id,
@@ -36,21 +38,26 @@ function toIncidentResponse(i: IncidentWithAssignees): IncidentResponse {
 
 export async function listIncidents(
   organizationId: string,
-  input: ListIncidentsInput,
+  input: ListIncidentsInput
 ): Promise<{ data: IncidentResponse[]; pagination: PaginationMeta }> {
   const where: Prisma.IncidentWhereInput = { organizationId }
-  if (input.status !== undefined) where.status = input.status as never
-  if (input.severity !== undefined) where.severity = input.severity as never
+  if (input.status !== undefined) where.status = input.status
+  if (input.severity !== undefined) where.severity = input.severity
   if (input.serviceId !== undefined) where.serviceId = input.serviceId
-  if (input.assignee !== undefined) where.assignees = { some: { userId: input.assignee } }
-  if (input.q !== undefined) where.title = { contains: input.q, mode: "insensitive" }
+  if (input.assignee !== undefined)
+    where.assignees = { some: { userId: input.assignee } }
+  if (input.q !== undefined)
+    where.title = { contains: input.q, mode: "insensitive" }
 
   const [total, incidents] = await Promise.all([
     db.incident.count({ where }),
     db.incident.findMany({
       where,
       include: { assignees: { include: { user: true } } },
-      orderBy: { [input.sort]: input.order },
+      // `severity` has only four distinct values, so ties are the norm; without
+      // a unique tiebreaker Postgres may order tied rows differently from one
+      // LIMIT/OFFSET page to the next, repeating or skipping incidents.
+      orderBy: [{ [input.sort]: input.order }, { id: "asc" }],
       skip: (input.page - 1) * input.limit,
       take: input.limit,
     }),
@@ -69,7 +76,7 @@ export async function listIncidents(
 
 export async function getIncident(
   organizationId: string,
-  incidentId: string,
+  incidentId: string
 ): Promise<IncidentResponse> {
   const incident = await db.incident.findFirst({
     where: { id: incidentId, organizationId },
@@ -84,7 +91,7 @@ export async function getIncident(
 export async function createIncident(
   organizationId: string,
   creatorId: string,
-  input: CreateIncidentInput,
+  input: CreateIncidentInput
 ): Promise<IncidentResponse> {
   // Verify service belongs to this org
   const service = await db.service.findFirst({
@@ -101,7 +108,11 @@ export async function createIncident(
       select: { id: true },
     })
     if (members.length !== input.assignees.length) {
-      throw new AppError("INVALID_ASSIGNEE", "One or more assignees are not members of this organization", 400)
+      throw new AppError(
+        "INVALID_ASSIGNEE",
+        "One or more assignees are not members of this organization",
+        400
+      )
     }
   }
 
@@ -111,7 +122,7 @@ export async function createIncident(
         organizationId,
         serviceId: input.serviceId,
         title: input.title,
-        severity: input.severity as never,
+        severity: input.severity,
         assignees: {
           create: input.assignees.map((userId) => ({ userId })),
         },
@@ -138,11 +149,38 @@ export async function createIncident(
   return toIncidentResponse(incident)
 }
 
+const VERSION_CONFLICT_MESSAGE =
+  "Incident was modified by another user. Please refresh and try again."
+
+// A conditional write matched nothing. Look at the row again (inside the same
+// transaction) to report why: it is gone, already resolved, or changed under us.
+async function explainFailedWrite(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  incidentId: string,
+  resolvedMessage: string
+): Promise<AppError> {
+  const current = await tx.incident.findFirst({
+    where: { id: incidentId, organizationId },
+    select: { status: true },
+  })
+  if (current === null) {
+    return new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
+  }
+  if (current.status === "RESOLVED") {
+    return new BusinessError(
+      ErrorCode.INCIDENT_ALREADY_RESOLVED,
+      resolvedMessage
+    )
+  }
+  return new ConflictError(VERSION_CONFLICT_MESSAGE)
+}
+
 export async function updateIncident(
   organizationId: string,
   incidentId: string,
   actorId: string,
-  input: UpdateIncidentInput,
+  input: UpdateIncidentInput
 ): Promise<IncidentResponse> {
   const incident = await db.incident.findFirst({
     where: { id: incidentId, organizationId },
@@ -150,15 +188,23 @@ export async function updateIncident(
   if (incident === null) {
     throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
+  const resolvedMessage = "A resolved incident cannot be modified."
+  if (incident.status === "RESOLVED") {
+    throw new BusinessError(
+      ErrorCode.INCIDENT_ALREADY_RESOLVED,
+      resolvedMessage
+    )
+  }
 
-  // Optimistic concurrency check
+  // Optimistic concurrency check: fail fast when the client's copy is stale.
   if (input.version !== undefined && incident.version !== input.version) {
-    throw new AppError("VERSION_CONFLICT", "Incident was modified by another user. Please refresh and try again.", 409)
+    throw new ConflictError(VERSION_CONFLICT_MESSAGE)
   }
 
   const { version: _version, ...fields } = input
 
-  const activities: { type: ActivityType; payload: Record<string, unknown> }[] = []
+  const activities: { type: ActivityType; payload: Prisma.InputJsonObject }[] =
+    []
 
   if (fields.title !== undefined && fields.title !== incident.title) {
     activities.push({
@@ -172,13 +218,40 @@ export async function updateIncident(
       payload: { from: incident.severity, to: fields.severity },
     })
   }
+  if (fields.status !== undefined && fields.status !== incident.status) {
+    activities.push({
+      type: "STATUS_CHANGED",
+      payload: { from: incident.status, to: fields.status },
+    })
+  }
 
   const updated = await db.$transaction(async (tx) => {
-    const u = await tx.incident.update({
-      where: { id: incidentId },
-      data: { ...(fields.title !== undefined && { title: fields.title }), ...(fields.severity !== undefined && { severity: fields.severity as never }), version: { increment: 1 } },
-      include: { assignees: { include: { user: true } } },
+    // The check above is only an early exit. Two requests holding the same
+    // version can both pass it, so the write itself must be the compare-and-set:
+    // matching on `version` (and "not resolved") means the second UPDATE finds
+    // nothing once the first has committed, instead of overwriting it.
+    const { count } = await tx.incident.updateMany({
+      where: {
+        id: incidentId,
+        organizationId,
+        version: incident.version,
+        status: { not: "RESOLVED" },
+      },
+      data: {
+        ...(fields.title !== undefined && { title: fields.title }),
+        ...(fields.severity !== undefined && { severity: fields.severity }),
+        ...(fields.status !== undefined && { status: fields.status }),
+        version: { increment: 1 },
+      },
     })
+    if (count === 0) {
+      throw await explainFailedWrite(
+        tx,
+        organizationId,
+        incidentId,
+        resolvedMessage
+      )
+    }
 
     if (activities.length > 0) {
       await tx.activity.createMany({
@@ -186,12 +259,15 @@ export async function updateIncident(
           incidentId,
           actorId,
           type: a.type,
-          payload: a.payload as Prisma.InputJsonValue,
+          payload: a.payload,
         })),
       })
     }
 
-    return u
+    return tx.incident.findUniqueOrThrow({
+      where: { id: incidentId },
+      include: { assignees: { include: { user: true } } },
+    })
   })
 
   return toIncidentResponse(updated)
@@ -200,24 +276,31 @@ export async function updateIncident(
 export async function resolveIncident(
   organizationId: string,
   incidentId: string,
-  actorId: string,
+  actorId: string
 ): Promise<IncidentResponse> {
-  const incident = await db.incident.findFirst({ where: { id: incidentId, organizationId }, include: { assignees: { include: { user: true } } } })
-  if (incident === null) {
-    throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
-  }
-  if (incident.status === "RESOLVED") {
-    throw new AppError("INCIDENT_ALREADY_RESOLVED", "Incident is already resolved", 409)
-  }
-
   const resolved = await db.$transaction(async (tx) => {
-    const u = await tx.incident.update({
-      where: { id: incidentId },
+    // Resolve with a conditional write so that two concurrent requests cannot
+    // both succeed (which recorded two RESOLVED activities and overwrote
+    // resolvedAt); the loser matches no row and is reported as already resolved.
+    const { count } = await tx.incident.updateMany({
+      where: { id: incidentId, organizationId, status: { not: "RESOLVED" } },
       data: {
         status: "RESOLVED",
         resolvedAt: new Date(),
         version: { increment: 1 },
       },
+    })
+    if (count === 0) {
+      throw await explainFailedWrite(
+        tx,
+        organizationId,
+        incidentId,
+        "Incident is already resolved."
+      )
+    }
+
+    const u = await tx.incident.findUniqueOrThrow({
+      where: { id: incidentId },
       include: { assignees: { include: { user: true } } },
     })
 
@@ -242,7 +325,7 @@ export async function addAssignment(
   organizationId: string,
   incidentId: string,
   actorId: string,
-  userId: string,
+  userId: string
 ): Promise<void> {
   const [incident, member] = await Promise.all([
     db.incident.findFirst({ where: { id: incidentId, organizationId } }),
@@ -253,7 +336,11 @@ export async function addAssignment(
     throw new AppError("INCIDENT_NOT_FOUND", "Incident not found", 404)
   }
   if (member === null) {
-    throw new AppError("MEMBER_NOT_FOUND", "Member not found in this organization", 404)
+    throw new AppError(
+      "MEMBER_NOT_FOUND",
+      "Member not found in this organization",
+      404
+    )
   }
 
   try {
@@ -269,8 +356,12 @@ export async function addAssignment(
       })
     })
   } catch (err) {
-    if (isPrismaError(err, "P2002")) {
-      throw new AppError("ALREADY_ASSIGNED", "User is already assigned to this incident", 409)
+    if (isUniqueViolation(err)) {
+      throw new AppError(
+        "ALREADY_ASSIGNED",
+        "User is already assigned to this incident",
+        409
+      )
     }
     throw err
   }
@@ -280,7 +371,7 @@ export async function removeAssignment(
   organizationId: string,
   incidentId: string,
   actorId: string,
-  userId: string,
+  userId: string
 ): Promise<void> {
   const incident = await db.incident.findFirst({
     where: { id: incidentId, organizationId },
@@ -313,15 +404,4 @@ export async function removeAssignment(
       },
     })
   })
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isPrismaError(err: unknown, code: string): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as Record<string, unknown>)["code"] === code
-  )
 }

@@ -20,4 +20,4 @@ let dummyHash: Promise<string> | undefined
 export function getDummyHash(): Promise<string> {
   dummyHash ??= hash(randomUUID(), COST)
   return dummyHash
-} 
+}

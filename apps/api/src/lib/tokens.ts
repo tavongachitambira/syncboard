@@ -57,6 +57,18 @@ export async function issueTokenPair(claims: {
   return { accessToken, refreshToken: randomBytes(32).toString("hex") }
 }
 
+// Sign and verify a throwaway token at startup. A malformed, wrong-format
+// (e.g. PKCS#1 instead of PKCS#8) or mismatched key pair then stops the server
+// here, instead of /health reporting "healthy" while every login returns 500.
+export async function verifyKeyPair(): Promise<void> {
+  const { accessToken } = await issueTokenPair({
+    userId: randomUUID(),
+    organizationId: randomUUID(),
+    role: "VIEWER",
+  })
+  await verifyAccessToken(accessToken)
+}
+
 // Verifies the signature and parses the claims. With allowExpired the token may
 // be past exp (but never older than the refresh lifetime): /auth/refresh and
 // /auth/logout only need a trustworthy sub and jti from it.

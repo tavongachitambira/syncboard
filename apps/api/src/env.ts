@@ -13,6 +13,11 @@ const schema = z.object({
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),
   WEB_URL: z.url().default("http://localhost:3000"),
+  // How many reverse proxies sit in front of the API (1 for a single Nginx or
+  // Caddy). Without it req.ip is the proxy's address, so the per-IP rate limits
+  // would be shared by every client. Leave at 0 when clients connect directly:
+  // X-Forwarded-For is then ignored and cannot be spoofed.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
   // PEM with literal \n for newlines. Only apps/api holds the private key.
