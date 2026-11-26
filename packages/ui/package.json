@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audit:contrast": "node scripts/contrast-audit.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

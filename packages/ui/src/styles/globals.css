@@ -2,131 +2,920 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/*
+ * SyncBoard design tokens.
+ *
+ * Three layers (Design Tokens): primitives -> semantic roles -> component roles.
+ *   1. primitives   --color-brand-100..900, --color-neutral-100..900, the type / radius / space scales
+ *   2. semantic     --background, --card, --primary, --destructive, --sev-*, --spacing-within ...
+ *   3. component    --radius-control / -card / -dialog, --card-spacing, --row-h ...
+ * Names say what a token is FOR, never what it is (no "blue-500"). Dark mode swaps the
+ * semantic set; components never change.
+ *
+ * Direction: dense, quiet, legible under stress.
+ *  - Three stacked surfaces (canvas -> surface -> raised) plus a ~8% hairline.
+ *  - ONE accent (teal) on the selected row, the primary action and the focus ring.
+ *  - Red is reserved for destruction and errors. Urgency is orange/amber and is never
+ *    carried by colour alone (signal-bars glyph + a text label do the work).
+ *  - 4px grid for UI, golden-ratio steps for page rhythm, 13px UI text, 32px rows.
+ *  - Motion: state changes <=150ms ease-out; overlays 240ms in / 150ms out.
+ *
+ * Contrast (WCAG 2.2 AA: 4.5:1 text, 3:1 control edges / focus rings / chart marks) is
+ * enforced by `pnpm --filter @workspace/ui audit:contrast`.
+ */
+
 @custom-variant dark (&:is(.dark *));
-@source "../../../apps/**/*.{ts,tsx}";
-@source "../../../components/**/*.{ts,tsx}";
+/* Hover is an enhancement. `can-hover:` = a real hover-capable, fine pointer. */
+@custom-variant can-hover (@media (hover: hover) and (pointer: fine));
+/* `ready:` = not disabled, not unavailable (aria-disabled), not busy. Interaction feedback lives behind it. */
+@custom-variant ready (&:not(:disabled, [aria-disabled="true"], [aria-busy="true"]));
 @source "../**/*.{ts,tsx}";
 
-@theme inline {
-    --font-heading: var(--font-sans);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
-    --font-sans: var(--font-sans);
+/* ------------------------------------------------------------------ */
+/* Primitives + scales                                                  */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  /* Numbered brand scale (teal). Semantic tokens below point into it. */
+  --color-brand-100: oklch(0.965 0.025 190);
+  --color-brand-200: oklch(0.925 0.05 190);
+  --color-brand-300: oklch(0.87 0.08 190);
+  --color-brand-400: oklch(0.79 0.1 190);
+  --color-brand-500: oklch(0.7 0.105 190);
+  --color-brand-600: oklch(0.6 0.1 190);
+  --color-brand-700: oklch(0.5 0.085 190);
+  --color-brand-800: oklch(0.41 0.07 190);
+  --color-brand-900: oklch(0.32 0.054 190);
+
+  /* Neutral scale, cool-tinted so greys sit with the teal. */
+  --color-neutral-100: oklch(0.965 0.004 225);
+  --color-neutral-200: oklch(0.925 0.005 225);
+  --color-neutral-300: oklch(0.86 0.007 225);
+  --color-neutral-400: oklch(0.74 0.01 225);
+  --color-neutral-500: oklch(0.62 0.012 225);
+  --color-neutral-600: oklch(0.52 0.014 225);
+  --color-neutral-700: oklch(0.42 0.014 225);
+  --color-neutral-800: oklch(0.3 0.012 225);
+  --color-neutral-900: oklch(0.2 0.01 225);
+
+  /*
+   * Type scale. The UI default is 13px (dense); 16px is body copy and mobile inputs.
+   * Headline ~2x body: 26px over 13px. 26 / 42 / 68 are the golden-ratio steps up from 16.
+   */
+  --text-*: initial;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 0.875rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.4375rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2rem;
+  --text-2xl--letter-spacing: -0.015em;
+  --text-3xl: 2.0625rem;
+  --text-3xl--line-height: 2.375rem;
+  --text-3xl--letter-spacing: -0.02em;
+  --text-4xl: 2.625rem;
+  --text-4xl--line-height: 2.875rem;
+  --text-4xl--letter-spacing: -0.025em;
+  --text-5xl: 3.25rem;
+  --text-5xl--line-height: 3.5rem;
+  --text-5xl--letter-spacing: -0.03em;
+  --text-6xl: 4.25rem;
+  --text-6xl--line-height: 4.25rem;
+  --text-6xl--letter-spacing: -0.035em;
+
+  /* Default transition for hover / focus / pressed state changes: <=150ms, ease-out. */
+  --default-transition-duration: 120ms;
+  --default-transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Referenced via var() as well as utilities, so always emitted. */
+@theme static {
+  /*
+   * Radius: ONE scale (4 / 8 / 12 / 16 / 24) and roles that pick from it by element size.
+   * Nested corners are concentric: inner = outer - padding (--radius-item).
+   */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+  --radius-4xl: 2.5rem;
+  --radius-tooltip: var(--radius-sm);
+  --radius-control: var(--radius-md);
+  --radius-card: var(--radius-lg);
+  --radius-dialog: var(--radius-xl);
+  --radius-panel: var(--radius-2xl);
+  --radius-item: calc(var(--radius-card) - 0.25rem);
+
+  /*
+   * Space by role (Proximity): ~12px inside a group, ~40px between groups. Let the gap
+   * do the grouping before reaching for a border or a divider.
+   * Golden-ratio steps (8 -> 13 -> 21 -> 34 -> 55 -> 89) are for page rhythm only;
+   * components sit on the 4px grid.
+   */
+  --spacing-within: 0.75rem;
+  --spacing-between: 2.5rem;
+  --spacing-phi-1: 0.8125rem;
+  --spacing-phi-2: 1.3125rem;
+  --spacing-phi-3: 2.125rem;
+  --spacing-phi-4: 3.4375rem;
+  --spacing-phi-5: 5.5625rem;
+  /* Grid gutters by mood: 8 dense / 24 balanced / 40 editorial. */
+  --spacing-gutter-dense: 0.5rem;
+  --spacing-gutter: 1.5rem;
+  --spacing-gutter-editorial: 2.5rem;
+
+  /* Easing: ease-out entering, ease-in leaving, in-out moving, a restrained spring only
+     for dialogs, confirmations and press-release. */
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  /* Durations. State changes <=150ms; overlays 240ms in, 150ms out; cards 200ms. */
+  --duration-instant: 80ms;
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-card: 200ms;
+  --duration-enter: 240ms;
+  --duration-exit: 150ms;
+  --duration-attention: 600ms;
+  /* Under ~300ms show no loading indicator at all; a flash reads as a glitch. */
+  --delay-spinner: 300ms;
+
+  /* Stacking. Menus, selects and tooltips sit ABOVE dialogs; toasts above everything.
+     z-index only ranks siblings in one stacking context: give components `isolate`. */
+  --z-sticky: 10;
+  --z-bar: 20;
+  --z-scrim: 30;
+  --z-dialog: 40;
+  --z-popover: 50;
+  --z-toast: 60;
+
+  /* Component roles. Controls: xs 24 / sm 32 / md 36 / lg 40; coarse pointers get >=44. */
+  --control-xs: 1.5rem;
+  --control-sm: 2rem;
+  --control-md: 2.25rem;
+  --control-lg: 2.5rem;
+  --row-h: 2rem;
+  --hit-target: 2.75rem;
+  --sticky-cta-h: 4.5rem;
+  --scrim-blur: 4px;
+  /* Hover lift on interactive cards. */
+  --card-lift: 0.5rem;
+}
+
+@theme inline {
+  --font-sans:
+    var(--font-sans-ext, "Atkinson Hyperlegible Next"),
+    var(--font-sans-latin, "Atkinson Hyperlegible Next"), ui-sans-serif,
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    var(--font-mono-latin, "Atkinson Hyperlegible Mono"), ui-monospace,
+    "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-sans);
+
+  /* Semantic colours (shadcn contract + SyncBoard additions). */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-link: var(--link);
+  --color-field: var(--field);
+  --color-selection: var(--selection);
+  --color-scrim: var(--scrim);
+  --color-destructive: var(--destructive);
+  --color-destructive-solid: var(--destructive-solid);
+  --color-destructive-solid-hover: var(--destructive-solid-hover);
+  --color-destructive-solid-foreground: var(--destructive-solid-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-sev-critical: var(--sev-critical);
+  --color-sev-high: var(--sev-high);
+  --color-sev-medium: var(--sev-medium);
+  --color-sev-low: var(--sev-low);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-focus: var(--chart-focus);
+  --color-chart-context: var(--chart-context);
+
+  --color-presence-0: var(--presence-0);
+  --color-presence-1: var(--presence-1);
+  --color-presence-2: var(--presence-2);
+  --color-presence-3: var(--presence-3);
+  --color-presence-4: var(--presence-4);
+  --color-presence-5: var(--presence-5);
+  --color-presence-6: var(--presence-6);
+  --color-presence-7: var(--presence-7);
+  --color-presence-fg: var(--presence-fg);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Elevation. Three layers (tight contact, mid, wide ambient). Nothing in a list has a
+     shadow; only resting "elevated" cards, overlays and the item being dragged do. */
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: var(--elev-overlay);
+  --shadow-lg: var(--elev-dialog);
+  --shadow-rest: var(--elev-rest);
+  --shadow-overlay: var(--elev-overlay);
+  --shadow-dialog: var(--elev-dialog);
+  --shadow-lift: var(--elev-lift);
+  --shadow-glow: var(--elev-glow);
+
+  /* Animations (keyframes are emitted only when used). */
+  --animate-shimmer: shimmer 1.8s linear infinite;
+  --animate-pulse-ring: pulse-ring 2.4s ease-out infinite;
+  --animate-drain: drain var(--drain-duration, 5s) linear forwards;
+  --animate-pop: pop var(--duration-enter) var(--ease-spring) both;
+  --animate-attention: attention var(--duration-attention) ease-out;
+  --animate-delayed-in: delayed-in var(--duration-fast) var(--delay-spinner) both;
+  --animate-draw: draw 420ms var(--ease-enter) 120ms both;
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in oklch, currentColor 45%, transparent);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 7px transparent;
+    }
+  }
+  @keyframes drain {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes attention {
+    from {
+      background-color: var(--selection);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+  @keyframes delayed-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Semantic: light theme                                                */
+/* ------------------------------------------------------------------ */
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.148 0.004 228.8);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.148 0.004 228.8);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.148 0.004 228.8);
-    --primary: oklch(0.511 0.096 186.391);
-    --primary-foreground: oklch(0.984 0.014 180.72);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.963 0.002 197.1);
-    --muted-foreground: oklch(0.56 0.021 213.5);
-    --accent: oklch(0.963 0.002 197.1);
-    --accent-foreground: oklch(0.218 0.008 223.9);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.925 0.005 214.3);
-    --input: oklch(0.925 0.005 214.3);
-    --ring: oklch(0.723 0.014 214.4);
-    --chart-1: oklch(0.855 0.138 181.071);
-    --chart-2: oklch(0.704 0.14 182.503);
-    --chart-3: oklch(0.6 0.118 184.704);
-    --chart-4: oklch(0.511 0.096 186.391);
-    --chart-5: oklch(0.437 0.078 188.216);
-    --radius: 0.45rem;
-    --sidebar: oklch(0.987 0.002 197.1);
-    --sidebar-foreground: oklch(0.148 0.004 228.8);
-    --sidebar-primary: oklch(0.6 0.118 184.704);
-    --sidebar-primary-foreground: oklch(0.984 0.014 180.72);
-    --sidebar-accent: oklch(0.963 0.002 197.1);
-    --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-    --sidebar-border: oklch(0.925 0.005 214.3);
-    --sidebar-ring: oklch(0.723 0.014 214.4);
+  color-scheme: light;
+  /* shadcn compatibility; the radius roles above are the source of truth. */
+  --radius: 0.75rem;
+
+  /* Surfaces: canvas < surface (card) < raised (secondary) < overlay (popover). */
+  --background: oklch(0.97 0.004 225);
+  --foreground: oklch(0.2 0.012 225);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.955 0.005 225);
+  --secondary-foreground: var(--foreground);
+  --field: oklch(1 0 0);
+
+  /* Hover / highlight fills are translucent so they work on every surface. */
+  --muted: oklch(0 0 0 / 0.045);
+  --muted-foreground: oklch(0.47 0.015 225);
+  --subtle: oklch(0.52 0.014 225);
+  --accent: oklch(0 0 0 / 0.07);
+  --accent-foreground: var(--foreground);
+
+  /* One accent. */
+  --primary: oklch(0.5 0.085 190);
+  --primary-hover: oklch(0.45 0.076 190);
+  --primary-active: oklch(0.41 0.07 190);
+  --primary-foreground: oklch(0.985 0.01 190);
+  --link: oklch(0.47 0.08 190);
+  --selection: oklch(0.6 0.1 190 / 0.12);
+  --ring: oklch(0.55 0.09 190);
+
+  /* Edges. Hairline is decorative (~8%); strong is ~12-14% (card edges); `input` is the
+     control edge and clears 3:1. */
+  --border: oklch(0.2 0.02 225 / 0.09);
+  --border-strong: oklch(0.2 0.02 225 / 0.14);
+  --input: oklch(0.62 0.01 225);
+  --scrim: oklch(0.2 0.02 225 / 0.42);
+
+  /* Red: destruction and errors only. */
+  --destructive: oklch(0.5 0.19 27);
+  --destructive-solid: oklch(0.52 0.2 27);
+  --destructive-solid-hover: oklch(0.47 0.19 27);
+  --destructive-solid-foreground: oklch(0.985 0.005 27);
+
+  --success: oklch(0.5 0.12 155);
+  --warning: oklch(0.52 0.105 75);
+
+  /* Urgency: orange / amber / grey / grey. Always paired with a glyph and a label. */
+  --sev-critical: oklch(0.53 0.15 45);
+  --sev-high: oklch(0.52 0.105 75);
+  --sev-medium: oklch(0.5 0.03 225);
+  --sev-low: oklch(0.52 0.015 225);
+
+  /* Charts: one accent + context grey; categorical 1-5 for multi-series only. */
+  --chart-focus: oklch(0.52 0.088 190);
+  --chart-context: oklch(0.62 0.01 225);
+  --chart-1: oklch(0.52 0.088 190);
+  --chart-2: oklch(0.52 0.15 295);
+  --chart-3: oklch(0.55 0.11 80);
+  --chart-4: oklch(0.55 0.17 350);
+  --chart-5: oklch(0.52 0.14 255);
+
+  /* Presence: 8 identity colours, AA with white text and >=3:1 against both canvases. */
+  --presence-0: oklch(0.535 0.145 250);
+  --presence-1: oklch(0.535 0.16 285);
+  --presence-2: oklch(0.535 0.16 320);
+  --presence-3: oklch(0.535 0.16 355);
+  --presence-4: oklch(0.535 0.105 85);
+  --presence-5: oklch(0.535 0.13 130);
+  --presence-6: oklch(0.535 0.11 165);
+  --presence-7: oklch(0.535 0.088 205);
+  --presence-fg: oklch(0.99 0.003 225);
+
+  /* Elevation: tight contact + mid + wide ambient. */
+  --elev-rest: 0 1px 3px oklch(0.2 0.02 225 / 0.1), 0 14px 32px -10px oklch(0.2 0.02 225 / 0.14);
+  --elev-overlay:
+    0 1px 3px oklch(0.2 0.02 225 / 0.12), 0 6px 14px -2px oklch(0.2 0.02 225 / 0.12),
+    0 16px 32px -8px oklch(0.2 0.02 225 / 0.14);
+  --elev-dialog:
+    0 2px 4px oklch(0.2 0.02 225 / 0.12), 0 12px 24px -4px oklch(0.2 0.02 225 / 0.16),
+    0 32px 64px -12px oklch(0.2 0.02 225 / 0.26);
+  --elev-lift:
+    0 2px 4px oklch(0.2 0.02 225 / 0.12), 0 12px 24px -4px oklch(0.2 0.02 225 / 0.18),
+    0 24px 48px -12px oklch(0.2 0.02 225 / 0.26);
+  /* Accent glow: reserved for the single most important element in a view. */
+  --elev-glow: 0 0 0 1px oklch(0.55 0.09 190 / 0.35), 0 8px 32px -6px oklch(0.55 0.09 190 / 0.45);
+
+  /* Ambient background glow: neighbouring hues only (teal 190 -> cyan 225, <60deg of travel),
+     fading one way to transparent. Never put body text on the mid-transition zone. */
+  --gradient-ambient:
+    radial-gradient(42% 55% at 28% 0%, oklch(0.78 0.08 190 / 0.3), transparent 72%),
+    radial-gradient(36% 50% at 72% 6%, oklch(0.78 0.08 225 / 0.24), transparent 72%);
+
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
+/* ------------------------------------------------------------------ */
+/* Semantic: dark theme (swap the token set; do not invert colours)     */
+/* Near-black grey canvas (not #000), each surface lighter as it rises, */
+/* accents ~20% less saturated, text off-white with opacity tiers.      */
+/* ------------------------------------------------------------------ */
+
 .dark {
-    --background: oklch(0.148 0.004 228.8);
-    --foreground: oklch(0.987 0.002 197.1);
-    --card: oklch(0.218 0.008 223.9);
-    --card-foreground: oklch(0.987 0.002 197.1);
-    --popover: oklch(0.218 0.008 223.9);
-    --popover-foreground: oklch(0.987 0.002 197.1);
-    --primary: oklch(0.437 0.078 188.216);
-    --primary-foreground: oklch(0.984 0.014 180.72);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.275 0.011 216.9);
-    --muted-foreground: oklch(0.723 0.014 214.4);
-    --accent: oklch(0.275 0.011 216.9);
-    --accent-foreground: oklch(0.987 0.002 197.1);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.56 0.021 213.5);
-    --chart-1: oklch(0.855 0.138 181.071);
-    --chart-2: oklch(0.704 0.14 182.503);
-    --chart-3: oklch(0.6 0.118 184.704);
-    --chart-4: oklch(0.511 0.096 186.391);
-    --chart-5: oklch(0.437 0.078 188.216);
-    --sidebar: oklch(0.218 0.008 223.9);
-    --sidebar-foreground: oklch(0.987 0.002 197.1);
-    --sidebar-primary: oklch(0.704 0.14 182.503);
-    --sidebar-primary-foreground: oklch(0.277 0.046 192.524);
-    --sidebar-accent: oklch(0.275 0.011 216.9);
-    --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.56 0.021 213.5);
+  color-scheme: dark;
+
+  --background: oklch(0.18 0.008 225);
+  --foreground: oklch(0.965 0.004 225);
+  --card: oklch(0.215 0.009 225);
+  --popover: oklch(0.285 0.011 225);
+  --secondary: oklch(0.255 0.01 225);
+  --field: oklch(0.235 0.01 225);
+
+  --muted: oklch(1 0 0 / 0.05);
+  --muted-foreground: oklch(0.965 0.004 225 / 0.72);
+  --subtle: oklch(0.965 0.004 225 / 0.6);
+  --accent: oklch(1 0 0 / 0.09);
+
+  --primary: oklch(0.5 0.068 190);
+  --primary-hover: oklch(0.54 0.074 190);
+  --primary-active: oklch(0.46 0.062 190);
+  --primary-foreground: oklch(0.985 0.01 190);
+  --link: oklch(0.8 0.065 190);
+  --selection: oklch(0.7 0.08 190 / 0.16);
+  --ring: oklch(0.76 0.075 190);
+
+  --border: oklch(1 0 0 / 0.08);
+  --border-strong: oklch(1 0 0 / 0.13);
+  --input: oklch(0.56 0.01 225);
+  --scrim: oklch(0.1 0.01 225 / 0.62);
+
+  --destructive: oklch(0.76 0.115 22);
+  --destructive-solid: oklch(0.5 0.16 25);
+  --destructive-solid-hover: oklch(0.54 0.16 25);
+  --destructive-solid-foreground: oklch(0.985 0.005 27);
+
+  --success: oklch(0.78 0.096 155);
+  --warning: oklch(0.82 0.084 85);
+
+  --sev-critical: oklch(0.76 0.12 52);
+  --sev-high: oklch(0.82 0.084 85);
+  --sev-medium: oklch(0.76 0.025 225);
+  --sev-low: oklch(0.68 0.015 225);
+
+  --chart-focus: oklch(0.75 0.07 190);
+  --chart-context: oklch(0.59 0.01 225);
+  --chart-1: oklch(0.75 0.07 190);
+  --chart-2: oklch(0.74 0.095 295);
+  --chart-3: oklch(0.8 0.09 80);
+  --chart-4: oklch(0.76 0.11 350);
+  --chart-5: oklch(0.74 0.09 255);
+
+  /* A near-black canvas keeps shadows visible. */
+  --elev-rest: 0 1px 3px oklch(0 0 0 / 0.4), 0 14px 32px -10px oklch(0 0 0 / 0.5);
+  --elev-overlay:
+    0 1px 3px oklch(0 0 0 / 0.4), 0 8px 16px -4px oklch(0 0 0 / 0.4),
+    0 20px 40px -8px oklch(0 0 0 / 0.45);
+  --elev-dialog:
+    0 2px 4px oklch(0 0 0 / 0.4), 0 14px 28px -4px oklch(0 0 0 / 0.5),
+    0 36px 72px -12px oklch(0 0 0 / 0.6);
+  --elev-lift:
+    0 2px 4px oklch(0 0 0 / 0.4), 0 14px 28px -4px oklch(0 0 0 / 0.5),
+    0 28px 56px -12px oklch(0 0 0 / 0.6);
+  --elev-glow: 0 0 0 1px oklch(0.76 0.075 190 / 0.35), 0 8px 32px -6px oklch(0.7 0.07 190 / 0.4);
+
+  --gradient-ambient:
+    radial-gradient(42% 55% at 28% 0%, oklch(0.5 0.075 190 / 0.32), transparent 72%),
+    radial-gradient(36% 50% at 72% 6%, oklch(0.5 0.075 225 / 0.26), transparent 72%);
 }
+
+/* Presence colours are mode-independent (declared once on :root). */
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                 */
+/* ------------------------------------------------------------------ */
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-    }
+    @apply border-border outline-ring;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply bg-background text-foreground;
-    }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+    @apply bg-background text-foreground text-sm;
+    font-feature-settings: "kern", "calt";
+  }
+
+  /* Weight builds reading order: 800 display, 600 UI headings, 400 body and captions
+     (300 captions fail legibility on dark surfaces, so contrast does that job instead). */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    text-wrap: balance;
+  }
+  p,
+  li,
+  figcaption {
+    text-wrap: pretty;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--ring) 32%, transparent);
+  }
+
+  /* One icon set, one stroke weight: 2px at 24 and at 16 (non-scaling), outline style. */
+  svg.lucide {
+    stroke-width: 2px;
+  }
+  svg.lucide * {
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* Tap targets respond without the 300ms delay and without double-tap zoom. */
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"] {
+    touch-action: manipulation;
+  }
+
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]) {
     cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* Dark-mode autofill must not flash a light field. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    caret-color: var(--foreground);
+    box-shadow: 0 0 0 1000px var(--field) inset;
+    transition: background-color 9999s ease-out;
+  }
+
+  /* Use the native scroll-lock on <dialog>; Radix locks the body itself. */
+  html:has(dialog[open]:modal) {
+    overflow: hidden;
+  }
+
+  /* Sticky mobile CTA reserves its own height so it never covers the last row. */
+  body:has([data-sticky-cta]) {
+    padding-bottom: calc(var(--sticky-cta-h) + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 48rem) {
+    body:has([data-sticky-cta]) {
+      padding-bottom: 0;
     }
+  }
+
+  /* Validation without JavaScript: only styled once the user has interacted (:user-invalid). */
+  :where([data-slot="field"]):has(:user-invalid) [data-slot="field-label"] {
+    color: var(--destructive);
+  }
+
+  /* Windows high-contrast: keep focus outlines visible. */
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+  }
+
+  /* Honour "increase contrast". */
+  @media (prefers-contrast: more) {
+    :root {
+      --border: oklch(0 0 0 / 0.4);
+      --border-strong: oklch(0 0 0 / 0.6);
+      --input: oklch(0.4 0.01 225);
+    }
+    .dark {
+      --border: oklch(1 0 0 / 0.4);
+      --border-strong: oklch(1 0 0 / 0.6);
+      --input: oklch(0.8 0.01 225);
+    }
+  }
+
+  /* Reduced motion: no travel, no loops. Two things keep moving because they carry meaning:
+     the undo countdown (progress) and skeletons, which become a slow fade (a frozen
+     skeleton reads as broken). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
+    }
+    *:not(.animate-drain, [data-slot="skeleton"]),
+    *:not(.animate-drain, [data-slot="skeleton"])::before,
+    *:not(.animate-drain, [data-slot="skeleton"])::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+    }
+    [data-slot="skeleton"] {
+      background-image: none;
+      animation: skeleton-fade 2.4s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes skeleton-fade {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Utilities                                                            */
+/* ------------------------------------------------------------------ */
+
+/* Visible focus on everything interactive: 2px ring, 2px offset. Outline (not box-shadow)
+   so it survives forced-colors and follows border-radius. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* For rows / menu items inside overflow-hidden containers. */
+@utility focus-ring-inset {
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+}
+
+/* >=44px touch target on coarse pointers without changing the visual size.
+   Do not combine with absolute/fixed positioning (wrap the element instead). */
+@utility hit-area {
+  position: relative;
+  @media (pointer: coarse) {
+    &::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, var(--hit-target));
+      height: max(100%, var(--hit-target));
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+
+/* State changes stay <=150ms ease-out; only the transform gets the restrained spring,
+   so a press settles back with a small overshoot (press-release). */
+@utility press-spring {
+  transition:
+    background-color var(--duration-fast) var(--ease-enter),
+    border-color var(--duration-fast) var(--ease-enter),
+    color var(--duration-fast) var(--ease-enter),
+    opacity var(--duration-fast) var(--ease-enter),
+    outline-color var(--duration-fast) var(--ease-enter),
+    transform var(--duration-base) var(--ease-spring);
+}
+
+@utility scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* Overlay backdrop: dim AND blur what is behind so the dialog is the figure (figure-ground). */
+@utility scrim {
+  background-color: var(--scrim);
+  backdrop-filter: blur(var(--scrim-blur));
+}
+
+/* 12-column grid that collapses 12 -> 6 -> 4 -> 1 at each breakpoint.
+   Gutter by mood: data-gutter="dense" (8px) | default (24px) | "editorial" (40px).
+   Pick clean ratios with col-span (4:8, 6:6, 3:9). */
+@utility grid-12 {
+  display: grid;
+  column-gap: var(--spacing-gutter);
+  grid-template-columns: minmax(0, 1fr);
+  &[data-gutter="dense"] {
+    column-gap: var(--spacing-gutter-dense);
+  }
+  &[data-gutter="editorial"] {
+    column-gap: var(--spacing-gutter-editorial);
+  }
+  @media (min-width: 30rem) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  @media (min-width: 48rem) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  @media (min-width: 64rem) {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+
+/* 62 / 38 split: the larger share goes to the primary content. */
+@utility grid-cols-phi {
+  grid-template-columns: minmax(0, 1.618fr) minmax(0, 1fr);
+}
+
+/* Quantity queries: one card stays readable, two split evenly, three or more reflow. */
+@utility qty-grid {
+  display: grid;
+  gap: --spacing(3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  &:has(> :only-child) {
+    grid-template-columns: minmax(0, 28rem);
+  }
+  &:has(> :nth-child(2):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Optically match round glyphs to square ones (+6%, inside the 5-8% band). */
+@utility optical-round {
+  scale: 1.06;
+}
+
+/* Stagger direct children ~60ms apart: set style={{ "--i": index }} on each child. */
+@utility stagger {
+  & > * {
+    transition-delay: calc(var(--i, 0) * 60ms);
+  }
+}
+
+/* Reveal secondary controls on hover for pointer users, staggered ~60ms (--i) and anchored
+   by the caller to the card's bottom edge. Always visible on touch, and on focus. */
+@utility reveal-on-hover {
+  @media (hover: hover) and (pointer: fine) {
+    opacity: 0;
+    translate: 0 6px;
+    transition:
+      opacity var(--duration-card) var(--ease-enter) calc(var(--i, 0) * 60ms),
+      translate var(--duration-card) var(--ease-enter) calc(var(--i, 0) * 60ms);
+    &:where(
+      .group\/row:hover *,
+      .group\/row:focus-within *,
+      .group\/card:hover *,
+      .group\/card:focus-within *
+    ),
+    &:focus-visible,
+    &:focus-within,
+    &[data-state="open"] {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+}
+
+/* Film grain on gradients (2-3%): hides banding on weak screens and adds texture.
+   The host must be positioned (relative / absolute); it gets its own stacking context. */
+@utility grain {
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.03;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+/* ---- Scroll-driven animation: native CSS, no scroll listeners. Progressive enhancement:
+   unsupported browsers and reduced-motion users get the static result. ---- */
+
+@keyframes scroll-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes shrink-header {
+  from {
+    padding-block: 1rem;
+    background-color: transparent;
+    border-color: transparent;
+  }
+  to {
+    padding-block: 0.5rem;
+    background-color: color-mix(in oklch, var(--background) 82%, transparent);
+    border-color: var(--border);
+  }
+}
+@keyframes parallax {
+  to {
+    transform: translateY(calc(var(--parallax-speed, 1) * 12px));
+  }
+}
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* Reading / scroll progress bar pinned to the top edge. */
+@utility scroll-progress {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: var(--z-bar);
+  height: 2px;
+  background: var(--primary);
+  transform-origin: left;
+  transform: scaleX(0);
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: scroll-progress linear both;
+      animation-timeline: scroll(root block);
+    }
+  }
+}
+
+/* Sticky header that tightens and gains a hairline as the page scrolls. */
+@utility shrink-on-scroll {
+  position: sticky;
+  top: 0;
+  border-bottom: 1px solid transparent;
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: shrink-header linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 96px;
+    }
+  }
+}
+
+/* Depth layers: set --parallax-speed (1 / 2.5 / 5) per layer for background / mid / foreground. */
+@utility parallax {
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: parallax linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 100vh;
+    }
+  }
+}
+
+/* Fade/slide an element in as it enters the viewport. Use sparingly. */
+@utility reveal-in-view {
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+  }
 }
