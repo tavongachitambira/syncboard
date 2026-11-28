@@ -269,6 +269,7 @@
   --animate-delayed-in: delayed-in var(--duration-fast) var(--delay-spinner) both;
   --animate-draw: draw 420ms var(--ease-enter) 120ms both;
   --animate-shake: shake 360ms var(--ease-move);
+  --animate-typing-dot: typing-dot 1.2s ease-in-out infinite;
 
   @keyframes shimmer {
     0% {
@@ -327,6 +328,19 @@
     }
     to {
       stroke-dashoffset: 0;
+    }
+  }
+  /* Typing indicator: three dots rise in turn (each dot sets its own animation-delay). */
+  @keyframes typing-dot {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.45;
+    }
+    30% {
+      transform: translateY(-3px);
+      opacity: 1;
     }
   }
   /* A wrong answer shakes once (reduced motion drops it; the message always says so too). */
