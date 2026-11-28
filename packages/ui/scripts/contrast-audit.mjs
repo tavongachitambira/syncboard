@@ -1,3 +1,4 @@
+/* global process */
 // WCAG contrast audit for the token contract in globals.css.
 // usage: node contrast-audit.mjs [path/to/globals.css] [--all]
 // Parses `:root` and `.dark` blocks (flat `--token: oklch(...)` lines), resolves var() refs,
